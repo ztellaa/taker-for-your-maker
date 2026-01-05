@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>RBC Wealth Map – v12.1</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header>
+  <div class="rbc-branding">
+    <div class="rbc-logo">
+      <div class="rbc-shield">RBC</div>
+      <span>Wealth Management CRM</span>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="left">
+      <button class="btn primary" id="addRoot" type="button">New Map</button>
+      <select id="templateSelect" title="Template">
+        <option value="">Template: none</option>
+        <option>Client</option><option>COI</option><option>Account</option><option>Task</option>
+        <option>Opportunity</option><option>Recurring Contact</option><option>Note</option><option>Sub-Tree</option>
+      </select>
+      <button class="btn" id="addChild" type="button">Add Child</button>
+      <label style="display:flex;gap:6px;align-items:center">Activity offset
+        <input id="defaultOffset" type="number" min="0" value="7" style="width:60px" />
+      </label>
+      <button class="btn" id="editNode" type="button">Edit</button>
+      <button class="btn" id="toggleHighlight" type="button">Flag</button>
+      <button class="btn" id="foldBtn" type="button">Fold</button>
+      <button class="btn danger" id="deleteNode" type="button">Delete</button>
+      <button class="btn" id="mailingBtn" type="button">Mailing</button>
+      <input id="search" type="text" placeholder="Search nodes…" />
+    </div>
+    <div class="right">
+      <div class="toggle" role="tablist" aria-label="View mode">
+        <button class="btn active" id="viewMind" type="button">Mind Map</button>
+        <button class="btn" id="viewList" type="button">Tasks</button>
+      </div>
+      <div class="toggle" aria-label="Zoom">
+        <button class="btn" id="zoomOut" type="button">−</button>
+        <button class="btn" id="zoomReset" type="button">100%</button>
+        <button class="btn" id="zoomIn" type="button">+</button>
+      </div>
+      <button class="btn" id="distributeBtn" type="button" title="Auto-arrange">Arrange</button>
+      <button class="btn accent" id="saveBtn" type="button">Save</button>
+      <button class="btn" id="loadBtn" type="button">Load</button>
+      <button class="btn" id="backupsBtn" type="button">Backups</button>
+      <input type="file" id="fileInput" accept="application/json" style="display:none" />
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="mindmapView" class="active" aria-label="Mind Map">
+    <div class="stage-wrap" id="stageWrap">
+      <div class="stage" id="stage" style="transform: translate(40px,45px) scale(1)">
+        <svg class="links" id="linkLayer"></svg>
+        <div id="nodeLayer"></div>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat">
+        <span>Total Clients:</span>
+        <span class="stat-value" id="statClients">0</span>
+      </div>
+      <div class="stat">
+        <span>Total AUM:</span>
+        <span class="stat-value" id="statAUM">$0</span>
+      </div>
+      <div class="stat">
+        <span>Active Tasks:</span>
+        <span class="stat-value" id="statTasks">0</span>
+      </div>
+      <div class="stat">
+        <span>Opportunities:</span>
+        <span class="stat-value" id="statOpps">0</span>
+      </div>
+    </div>
+  </section>
+  <section id="listView" aria-label="Task List">
+    <div class="list-toolbar">
+      <select id="listSort">
+        <option value="due">Sort by due date</option>
+        <option value="status">Sort by status</option>
+        <option value="title">Sort by title</option>
+      </select>
+      <div class="toggle" id="statusFilters" aria-label="Task filters">
+        <button class="btn active" data-filter="now" type="button">Now</button>
+        <button class="btn" data-filter="todo" type="button">To do</button>
+        <button class="btn" data-filter="inprogress" type="button">In progress</button>
+        <button class="btn" data-filter="blocked" type="button">Blocked</button>
+        <button class="btn" data-filter="done" type="button">Done</button>
+        <button class="btn" data-filter="overdue" type="button">Overdue</button>
+      </div>
+      <button class="btn" id="expandAll" type="button">Expand all</button>
+      <button class="btn" id="collapseAll" type="button">Collapse all</button>
+    </div>
+    <div class="list" id="taskList"></div>
+  </section>
+</main>
+
+<!-- Editor Modal -->
+<div class="modal-backdrop" id="editorBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+    <h3 id="editorTitle">Edit Node</h3>
+    <div class="grid2">
+      <div class="field"><label for="f_title">Title</label><input id="f_title" /></div>
+      <div class="field"><label for="f_template">Template</label><select id="f_template"></select></div>
+      <div class="field"><label for="f_status">Status</label><select id="f_status">
+        <option value="todo">To do</option>
+        <option value="inprogress">In progress</option>
+        <option value="blocked">Blocked</option>
+        <option value="done">Done</option>
+      </select></div>
+      <div class="field"><label for="f_due">Due date</label><input id="f_due" type="date" /></div>
+      <div class="field"><label for="f_lastcontact">Last Contact</label><input id="f_lastcontact" type="date" /></div>
+      <div class="field"><label for="f_nextcontact">Next Contact</label><input id="f_nextcontact" type="date" /></div>
+      <div class="field"><label for="f_freq">Contact Frequency</label><select id="f_freq">
+        <option value="">—</option>
+        <option value="monthly">Monthly</option>
+        <option value="quarterly">Quarterly</option>
+        <option value="biannually">Bi-Annually</option>
+        <option value="annually">Annually</option>
+      </select></div>
+      <div class="field"><label>Node Color</label><div id="colorPalette" class="palette"></div></div>
+      <div class="field" style="grid-column:1 / -1">
+        <label for="f_notes">Notes</label>
+        <textarea id="f_notes" rows="3" placeholder="Details, next steps, context"></textarea>
+      </div>
+    </div>
+    <h3 style="margin-top:20px">Record fields</h3>
+    <div id="kvArea"></div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="addKV" type="button">Add field</button>
+      <button class="btn" id="importAccounts" type="button" title="Import CSV">Import CSV</button>
+    </div>
+    <div class="actions">
+      <button class="btn" id="cancelEdit" type="button">Cancel</button>
+      <button class="btn accent" id="saveEdit" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backups Modal -->
+<div class="modal-backdrop" id="backupsBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backupsTitle">
+    <h3 id="backupsTitle">Backups</h3>
+    <div id="backupsList" class="list" style="max-height:50vh;overflow:auto"></div>
+    <div class="actions">
+      <button class="btn" id="closeBackups" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mailing Modal -->
+<div class="modal-backdrop" id="mailingBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mailingTitle">
+    <h3 id="mailingTitle">Mailing List</h3>
+    <div class="field">
+      <label>Audience</label>
+      <select id="audience">
+        <option value="clientsOpps">All Clients & Opportunities</option>
+        <option value="byTags">By Tags…</option>
+        <option value="clientsCoi">All Clients & COIs</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Filter Tags (when By Tags selected)</label>
+      <input id="tagsFilter" type="text" placeholder="comma-separated tags (e.g., client, quarterly, vip)" />
+    </div>
+    <div class="field">
+      <label>Preview (first 50)</label>
+      <div id="mailingPreview" class="list" style="max-height:40vh;overflow:auto"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="refreshPreview" type="button">Refresh</button>
+      <button class="btn accent" id="downloadCSV" type="button">Download CSV</button>
+      <button class="btn" id="closeMailing" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hint">v12.1: Fixed save button • Standardized template colors • 25px drag threshold • DD/MM/YY format</div>
+
+<script src="app.js"></script>
+</body>
+</html>
