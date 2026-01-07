@@ -11,7 +11,7 @@ window.Storage = (function() {
     state.lastDirty = Date.now();
     try {
       localStorage.setItem('wm.mindmap', JSON.stringify({
-        version: 13.0.3,
+        version: '13.0.3',
         createdAt: Date.now(),
         map: state.map
       }));
@@ -28,7 +28,7 @@ window.Storage = (function() {
 
   function downloadCurrent() {
     var payload = {
-      version: 13.0.3,
+      version: '13.0.3',
       createdAt: Date.now(),
       map: state.map
     };
@@ -75,7 +75,7 @@ window.Storage = (function() {
   function snapshotBackup(reason) {
     if(reason===undefined) reason = 'autosave';
     var payload = {
-      version: 13.0.3,
+      version: '13.0.3',
       createdAt: Date.now(),
       reason: reason,
       map: state.map
