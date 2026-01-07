@@ -407,13 +407,21 @@ window.Events = (function() {
       var nodeEl = e.target.closest('.node');
       if(nodeEl && nodeEl.dataset && nodeEl.dataset.id) {
         window.Render.selectNode(nodeEl.dataset.id);
+        var f = nodeOps.findNode(nodeEl.dataset.id);
+        if(f && f.node && f.node.template === 'Task') {
+          window.Modals.openTouchModal();
+        } else {
+          // Shake the node
+          nodeEl.classList.remove('shake');
+          void nodeEl.offsetWidth;
+          nodeEl.classList.add('shake');
+          setTimeout(function() {
+            nodeEl.classList.remove('shake');
+          }, 400);
+        }
       }
       e.preventDefault();
       e.stopPropagation();
-      nodeOps.touchCurrent();
-      window.Storage.markDirty();
-      window.Render.renderMindMap();
-      window.Render.buildList();
     }, true);
 
     // General node click handler
@@ -518,10 +526,25 @@ window.Events = (function() {
         moveSelection('right');
         e.preventDefault();
       } else if(e.key==='t' || e.key==='T') {
-        nodeOps.touchCurrent();
-        window.Storage.markDirty();
-        window.Render.renderMindMap();
-        window.Render.buildList();
+        if(!state.selectedId) return;
+        var f = nodeOps.findNode(state.selectedId);
+        if(!f || !f.node) return;
+
+        // Only allow touch on Task nodes
+        if(f.node.template === 'Task') {
+          window.Modals.openTouchModal();
+        } else {
+          // Shake the node to indicate invalid action
+          var nodeEl = document.querySelector('.node[data-id="' + state.selectedId + '"]');
+          if(nodeEl) {
+            nodeEl.classList.remove('shake');
+            void nodeEl.offsetWidth; // Trigger reflow to restart animation
+            nodeEl.classList.add('shake');
+            setTimeout(function() {
+              nodeEl.classList.remove('shake');
+            }, 400);
+          }
+        }
         e.preventDefault();
       }
     }, true);

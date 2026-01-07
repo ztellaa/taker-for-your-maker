@@ -186,6 +186,50 @@ window.Modals = (function() {
       dom.shortcutsBackdrop.style.display = 'none';
       dom.shortcutsBackdrop.setAttribute('aria-hidden','true');
     };
+
+    // Touch modal
+    dom.cancelTouchBtn.onclick = function() {
+      dom.touchBackdrop.style.display = 'none';
+      dom.touchBackdrop.setAttribute('aria-hidden','true');
+      // Clear radio selections
+      var radios = document.querySelectorAll('input[name="touchType"]');
+      radios.forEach(function(r) { r.checked = false; });
+    };
+
+    dom.confirmTouchBtn.onclick = function() {
+      // Get selected channel
+      var selected = document.querySelector('input[name="touchType"]:checked');
+      if(!selected) {
+        alert('Please select a contact method');
+        return;
+      }
+
+      var channel = selected.value;
+      var result = nodeOps.touchCurrent(channel);
+
+      if(result.success) {
+        dom.touchBackdrop.style.display = 'none';
+        dom.touchBackdrop.setAttribute('aria-hidden','true');
+        // Clear selections
+        var radios = document.querySelectorAll('input[name="touchType"]');
+        radios.forEach(function(r) { r.checked = false; });
+        // Select the newly created touch note
+        if(result.noteId) {
+          window.Render.selectNode(result.noteId);
+        }
+        window.Storage.markDirty();
+        window.Render.renderMindMap();
+        window.Render.buildList();
+      } else {
+        alert('Unable to record touch. Please try again.');
+      }
+    };
+  }
+
+  // Open touch modal
+  function openTouchModal() {
+    dom.touchBackdrop.style.display = 'flex';
+    dom.touchBackdrop.setAttribute('aria-hidden','false');
   }
 
   // Public API
@@ -194,6 +238,7 @@ window.Modals = (function() {
     computeAudience: computeAudience,
     refreshMailingPreview: refreshMailingPreview,
     downloadCSV: downloadCSV,
+    openTouchModal: openTouchModal,
     init: init
   };
 })();

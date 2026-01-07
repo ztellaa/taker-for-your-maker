@@ -87,6 +87,11 @@ window.DOM = (function() {
     shortcutsBackdrop: $('#shortcutsBackdrop'),
     closeShortcutsBtn: $('#closeShortcuts'),
 
+    // Touch modal
+    touchBackdrop: $('#touchBackdrop'),
+    cancelTouchBtn: $('#cancelTouch'),
+    confirmTouchBtn: $('#confirmTouch'),
+
     // Stats
     statClients: $('#statClients'),
     statAUM: $('#statAUM'),

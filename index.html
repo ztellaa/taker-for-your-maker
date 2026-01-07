@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>RBC Wealth Map – v12.1</title>
+<title>RBC Wealth Map – v13.0.3</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -303,6 +303,32 @@
   </div>
 </div>
 
+<!-- Touch Modal -->
+<div class="modal-backdrop" id="touchBackdrop" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="touchTitle">
+    <h3 id="touchTitle">Record Touch</h3>
+    <p style="color: var(--muted); margin-bottom: 16px;">Select the contact method used:</p>
+    <div class="touch-checkboxes" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+      <label class="touch-check" style="padding: 12px; cursor: pointer;">
+        <input type="radio" name="touchType" value="calls" id="touchModal_calls" />
+        <span>📞 Call</span>
+      </label>
+      <label class="touch-check" style="padding: 12px; cursor: pointer;">
+        <input type="radio" name="touchType" value="linkedin" id="touchModal_linkedin" />
+        <span>💼 LinkedIn</span>
+      </label>
+      <label class="touch-check" style="padding: 12px; cursor: pointer;">
+        <input type="radio" name="touchType" value="emails" id="touchModal_emails" />
+        <span>📧 Email</span>
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn" id="cancelTouch" type="button">Cancel</button>
+      <button class="btn accent" id="confirmTouch" type="button">Record Touch</button>
+    </div>
+  </div>
+</div>
+
 <!-- Keyboard Shortcuts Modal -->
 <div class="modal-backdrop" id="shortcutsBackdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
@@ -371,7 +397,7 @@
   </div>
 </div>
 
-<div class="hint" id="hint">v13.0.2: Parent touch sync • Enforced classification • Analytics view • Shortcuts</div>
+<div class="hint" id="hint">v13.0.3: Task-only touch workflow • Touch modal with analytics • Shake feedback</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>

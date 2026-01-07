@@ -372,20 +372,41 @@ window.NodeOps = (function() {
     return defaultColorForTemplate(tmpl||'Note');
   }
 
-  function touchCurrent() {
-    if(!state.selectedId) return;
+  function touchCurrent(channel) {
+    if(!state.selectedId) return { success: false, reason: 'no-selection' };
     var f = findNode(state.selectedId);
-    if(!f || !f.node) return;
+    if(!f || !f.node) return { success: false, reason: 'node-not-found' };
 
     var n = f.node;
+
+    // Only allow touch on Task nodes
+    if(n.template !== 'Task') {
+      return { success: false, reason: 'not-task' };
+    }
+
     if(!n.fields) n.fields = {};
     n.fields['Last Contact'] = utils.today();
 
-    var note = newNode('Touch '+utils.today(), 'Note', n);
+    // Map channel to display name
+    var channelNames = {
+      calls: '📞 Call',
+      linkedin: '💼 LinkedIn',
+      emails: '📧 Email'
+    };
+    var channelDisplay = channelNames[channel] || 'Touch';
+
+    var note = newNode(channelDisplay + ' - ' + utils.today(), 'Note', n);
     note.color = randomNodeColor('Note');
-    note.notes = 'Touched on '+utils.today();
+    note.notes = 'Touched on ' + utils.today() + ' via ' + channelDisplay;
     n.children = n.children || [];
     n.children.push(note);
+
+    // Record in analytics
+    if(window.Analytics && window.Analytics.recordTouch) {
+      window.Analytics.recordTouch(channel);
+    }
+
+    return { success: true, noteId: note.id };
   }
 
   // Find or create Task under Opportunity/COI node

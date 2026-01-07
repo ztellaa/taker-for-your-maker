@@ -199,7 +199,7 @@ window.Render = (function() {
         '<button class="btn" data-act="add" type="button">+Child</button>'+
         '<button class="btn" data-act="fold" type="button">'+(n.collapsed?'Unfold':'Fold')+'</button>'+
         '<button class="btn" data-act="edit" type="button">Edit</button>'+
-        (['Client','COI','Opportunity'].indexOf(n.template)!==-1?'<button class="btn" data-act="tap" type="button">Touch</button>':'')+
+        (n.template==='Task'?'<button class="btn" data-act="tap" type="button">Touch</button>':'')+
         '<button class="btn" data-act="hl" type="button">'+(n.highlight?'Unflag':'Flag')+'</button>'+
         '<button class="btn danger" data-act="del" type="button">Delete</button>';
 
