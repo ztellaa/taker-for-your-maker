@@ -225,6 +225,50 @@
   </div>
 </div>
 
+<!-- Touch Tracker Modal -->
+<div class="modal-backdrop" id="touchBackdrop" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="touchTitle">
+    <h3 id="touchTitle">Categorize Touch</h3>
+    <p class="muted">How did you contact this person?</p>
+    <div class="touch-options">
+      <label class="touch-option">
+        <input type="radio" name="touchChannel" value="calls" />
+        <div class="touch-label">
+          <div class="touch-icon">📞</div>
+          <div>
+            <div class="touch-name">Call</div>
+            <div class="touch-desc">Phone conversation</div>
+          </div>
+        </div>
+      </label>
+      <label class="touch-option">
+        <input type="radio" name="touchChannel" value="linkedin" />
+        <div class="touch-label">
+          <div class="touch-icon">💼</div>
+          <div>
+            <div class="touch-name">LinkedIn</div>
+            <div class="touch-desc">Message or interaction</div>
+          </div>
+        </div>
+      </label>
+      <label class="touch-option">
+        <input type="radio" name="touchChannel" value="emails" />
+        <div class="touch-label">
+          <div class="touch-icon">📧</div>
+          <div>
+            <div class="touch-name">Email</div>
+            <div class="touch-desc">Email correspondence</div>
+          </div>
+        </div>
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn" id="skipTouch" type="button">Skip</button>
+      <button class="btn accent" id="recordTouch" type="button">Record</button>
+    </div>
+  </div>
+</div>
+
 <div class="hint" id="hint">v12.1: Fixed save button • Standardized template colors • 25px drag threshold • DD/MM/YY format</div>
 
 <!-- Load modules in dependency order -->
@@ -237,6 +281,8 @@
 <script src="js/node-operations.js"></script>
 <script src="js/render.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/touch-tracker.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/modals.js"></script>
 <script src="js/events.js"></script>

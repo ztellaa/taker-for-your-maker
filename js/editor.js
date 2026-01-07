@@ -9,6 +9,7 @@ window.Editor = (function() {
   // Validation state
   var validationErrors = {};
   var currentNodeTemplate = null;
+  var originalLastContact = null;
 
   // Show validation error for a field
   function showFieldError(kvLine, message) {
@@ -128,6 +129,9 @@ window.Editor = (function() {
     validationErrors = {};
     currentNodeTemplate = node.template;
 
+    // Track original Last Contact for touch detection
+    originalLastContact = utils.normalizeDate((node.fields && node.fields['Last Contact']) || '');
+
     dom.f_title.value = node.title || '';
     dom.f_due.value = node.due || '';
     dom.f_notes.value = node.notes || '';
@@ -136,7 +140,7 @@ window.Editor = (function() {
     dom.f_freq.value = node.freq || '';
 
     // Set contact dates if they exist
-    dom.f_lastcontact.value = utils.normalizeDate((node.fields && node.fields['Last Contact']) || '');
+    dom.f_lastcontact.value = originalLastContact;
     dom.f_nextcontact.value = utils.normalizeDate((node.fields && node.fields['Next Contact']) || '');
 
     buildPalette(node.color);
@@ -315,6 +319,15 @@ window.Editor = (function() {
       window.Storage.markDirty();
       window.Render.renderMindMap();
       window.Render.buildList();
+
+      // Touch detection: if Last Contact changed for Client/COI/Opportunity, prompt for categorization
+      var newLastContact = dom.f_lastcontact.value || '';
+      var isContactTemplate = ['Client', 'COI', 'Opportunity'].indexOf(node.template) !== -1;
+      var lastContactChanged = newLastContact && newLastContact !== originalLastContact;
+
+      if (isContactTemplate && lastContactChanged) {
+        window.TouchTracker.openTouchModal();
+      }
     };
 
     dom.cancelEditBtn.onclick = function() {

@@ -32,7 +32,12 @@
     height:100%;
     -webkit-font-smoothing: antialiased;
   }
-  
+
+  .muted {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
   header{
     position:sticky;
     top:0;
@@ -691,4 +696,89 @@
 
   .help-content li {
     margin: 4px 0;
+  }
+
+  /* Touch tracker modal */
+  .touch-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .touch-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all .2s ease;
+  }
+
+  .touch-option:hover {
+    border-color: var(--rbc-light-blue);
+    background: var(--panel);
+  }
+
+  .touch-option input[type="radio"] {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    accent-color: var(--rbc-light-blue);
+  }
+
+  .touch-option input[type="radio"]:checked ~ .touch-label {
+    color: var(--rbc-light-blue);
+  }
+
+  .touch-option:has(input:checked) {
+    border-color: var(--rbc-light-blue);
+    background: var(--panel);
+  }
+
+  .touch-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .touch-icon {
+    font-size: 32px;
+    line-height: 1;
+  }
+
+  .touch-name {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  .touch-desc {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--rbc-blue);
+    color: white;
+    padding: 14px 24px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
+    z-index: 10000;
+    opacity: 0;
+    transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
