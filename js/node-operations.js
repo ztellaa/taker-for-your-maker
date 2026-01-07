@@ -388,6 +388,30 @@ window.NodeOps = (function() {
     n.children.push(note);
   }
 
+  // Find or create Task under Opportunity/COI node
+  function findOrCreateTask(opportunityNode) {
+    if(!opportunityNode) return null;
+
+    // Look for existing Task directly under this node
+    var existingTask = opportunityNode.children.find(function(c) {
+      return c.template === 'Task';
+    });
+
+    if(existingTask) return existingTask;
+
+    // No Task found, create one with due date = tomorrow
+    var tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    var tomorrowStr = tomorrow.toISOString().slice(0,10);
+
+    var task = newNode('Follow-up', 'Task', opportunityNode);
+    task.due = tomorrowStr;
+    task.status = 'todo';
+
+    opportunityNode.children.push(task);
+    return task;
+  }
+
   // Public API
   return {
     newNode: newNode,
@@ -409,6 +433,7 @@ window.NodeOps = (function() {
     deleteNodeCascade: deleteNodeCascade,
     tapRecurringFor: tapRecurringFor,
     onStatusChange: onStatusChange,
-    touchCurrent: touchCurrent
+    touchCurrent: touchCurrent,
+    findOrCreateTask: findOrCreateTask
   };
 })();

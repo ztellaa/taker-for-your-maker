@@ -190,12 +190,13 @@ window.Editor = (function() {
       var touchField = utils.$('#touchField');
 
       var isContactTemplate = (tmpl==='Client'||tmpl==='COI'||tmpl==='Opportunity');
+      var isTaskTemplate = (tmpl==='Task');
 
       freqField.style.display = (tmpl==='Client'||tmpl==='COI'||tmpl==='Recurring Contact') ? '' : 'none';
       dueField.style.display = (tmpl==='Task'||tmpl==='Recurring Contact') ? '' : 'none';
       lastContactField.style.display = isContactTemplate ? '' : 'none';
       nextContactField.style.display = isContactTemplate ? '' : 'none';
-      touchField.style.display = isContactTemplate ? '' : 'none';
+      touchField.style.display = isTaskTemplate ? '' : 'none';
     }
 
     setStatusOptions(node.template, node.status||'');
@@ -256,23 +257,6 @@ window.Editor = (function() {
     };
 
     dom.saveEditBtn.onclick = function() {
-      // Check if Last Contact changed and enforce touch classification
-      var newLastContact = dom.f_lastcontact.value || '';
-      var isContactTemplate = ['Client', 'COI', 'Opportunity'].indexOf(dom.f_template.value || node.template) !== -1;
-      var lastContactChanged = newLastContact && newLastContact !== originalLastContact;
-
-      if (isContactTemplate && lastContactChanged) {
-        var touchCalls = utils.$('#touch_calls');
-        var touchLinkedIn = utils.$('#touch_linkedin');
-        var touchEmails = utils.$('#touch_emails');
-        var hasSelection = (touchCalls && touchCalls.checked) || (touchLinkedIn && touchLinkedIn.checked) || (touchEmails && touchEmails.checked);
-
-        if (!hasSelection) {
-          alert('Please classify this touch by selecting Call, LinkedIn, or Email before saving.');
-          return;
-        }
-      }
-
       // Capture state before editing
       window.UndoManager.capture('edit', {nodeId: node.id, title: node.title});
 
@@ -377,16 +361,33 @@ window.Editor = (function() {
       window.Render.renderMindMap();
       window.Render.buildList();
 
-      // Touch recording: if Last Contact changed and a touch checkbox is checked, record it
+      // NEW TOUCH WORKFLOW (v13.0.3)
+
+      // 1. For Opportunity/COI: If Last Contact changed, update associated Task
       var newLastContact = dom.f_lastcontact.value || '';
       var newNextContact = dom.f_nextcontact.value || '';
-      var isContactTemplate = ['Client', 'COI', 'Opportunity'].indexOf(node.template) !== -1;
+      var isOppOrCOI = (node.template === 'Opportunity' || node.template === 'COI');
       var lastContactChanged = newLastContact && newLastContact !== originalLastContact;
 
-      if (isContactTemplate && lastContactChanged) {
+      if (isOppOrCOI && lastContactChanged) {
+        // Find or create Task under this Opportunity/COI
+        var task = nodeOps.findOrCreateTask(node);
+        if (task) {
+          if (!task.fields) task.fields = {};
+          task.fields['Last Contact'] = newLastContact;
+          if (newNextContact) {
+            task.fields['Next Contact'] = newNextContact;
+          }
+        }
+      }
+
+      // 2. For Task: If touch checkbox selected, create Touch node
+      var isTask = (node.template === 'Task');
+      if (isTask) {
         var touchCalls = utils.$('#touch_calls');
         var touchLinkedIn = utils.$('#touch_linkedin');
         var touchEmails = utils.$('#touch_emails');
+        var touchSuccessful = utils.$('#touch_successful');
 
         var selectedChannel = null;
         if (touchCalls && touchCalls.checked) selectedChannel = 'calls';
@@ -394,25 +395,74 @@ window.Editor = (function() {
         else if (touchEmails && touchEmails.checked) selectedChannel = 'emails';
 
         if (selectedChannel) {
+          // Create Touch node as child of this Task
+          var touchNode = nodeOps.newNode('Touch ' + utils.today(), 'Note', node);
+          touchNode.color = '#4CAF50'; // Green for touch
+          if (!touchNode.fields) touchNode.fields = {};
+          touchNode.fields['Touch Type'] = selectedChannel;
+          touchNode.fields['Date'] = utils.today();
+          touchNode.fields['Successful'] = (touchSuccessful && touchSuccessful.checked) ? 'Yes' : 'No';
+          node.children.push(touchNode);
+
+          // Record analytics
           var result = window.Analytics.recordTouch(selectedChannel);
           if (result.success) {
-            // Show toast notification
             window.TouchTracker.showToast('Touch recorded: ' + selectedChannel + ' (' + result.count + '/20 today)');
           }
-        }
 
-        // Propagate Last Contact and Next Contact to parent if this is an Opportunity or COI
-        if (node.template === 'Opportunity' || node.template === 'COI') {
-          var parentInfo = nodeOps.findNode(node.id);
-          if (parentInfo && parentInfo.parent) {
-            var parent = parentInfo.parent;
-            // Only update parent if it's a Client or COI
-            if (parent.template === 'Client' || parent.template === 'COI') {
-              if (!parent.fields) parent.fields = {};
-              parent.fields['Last Contact'] = newLastContact;
-              if (newNextContact) {
-                parent.fields['Next Contact'] = newNextContact;
+          // Handle successful vs unsuccessful touch
+          var wasSuccessful = (touchSuccessful && touchSuccessful.checked);
+          if (wasSuccessful) {
+            // Mark Task as completed
+            node.status = 'done';
+
+            // Propagate to parent Opportunity/COI and create new Task
+            var parentInfo = nodeOps.findNode(node.id);
+            if (parentInfo && parentInfo.parent) {
+              var parent = parentInfo.parent;
+              if (parent.template === 'Opportunity' || parent.template === 'COI') {
+                // Update parent's contact dates
+                if (!parent.fields) parent.fields = {};
+                parent.fields['Last Contact'] = utils.today();
+
+                // Calculate Next Contact using activity offset
+                var offsetDays = parseInt(dom.defaultOffsetInput.value) || 7;
+                var nextDate = new Date();
+                nextDate.setDate(nextDate.getDate() + offsetDays);
+                var nextContactStr = nextDate.toISOString().slice(0,10);
+                parent.fields['Next Contact'] = nextContactStr;
+
+                // Create new Task under parent
+                var newTask = nodeOps.newNode('Follow-up', 'Task', parent);
+                newTask.due = nextContactStr;
+                newTask.status = 'todo';
+                parent.children.push(newTask);
               }
+            }
+          } else {
+            // Unsuccessful touch: set Task due to tomorrow
+            var tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            node.due = tomorrow.toISOString().slice(0,10);
+          }
+
+          // Select the Touch node
+          state.selectedId = touchNode.id;
+        }
+      }
+
+      // 3. Propagate Task changes to parent Opportunity/COI
+      if (isTask) {
+        var parentInfo = nodeOps.findNode(node.id);
+        if (parentInfo && parentInfo.parent) {
+          var parent = parentInfo.parent;
+          if (parent.template === 'Opportunity' || parent.template === 'COI') {
+            if (!parent.fields) parent.fields = {};
+            if (node.fields && node.fields['Last Contact']) {
+              parent.fields['Last Contact'] = node.fields['Last Contact'];
+            }
+            if (node.fields && node.fields['Next Contact']) {
+              parent.fields['Next Contact'] = node.fields['Next Contact'];
             }
           }
         }

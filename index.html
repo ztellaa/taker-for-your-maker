@@ -193,11 +193,17 @@
         <option value="annually">Annually</option>
       </select></div>
       <div class="field" id="touchField" style="grid-column:1 / -1;display:none">
-        <label>Record Touch (if Last Contact updated)</label>
+        <label>Touch Details</label>
         <div class="touch-checkboxes">
           <label class="touch-check"><input type="checkbox" id="touch_calls" value="calls" /><span>📞 Call</span></label>
           <label class="touch-check"><input type="checkbox" id="touch_linkedin" value="linkedin" /><span>💼 LinkedIn</span></label>
           <label class="touch-check"><input type="checkbox" id="touch_emails" value="emails" /><span>📧 Email</span></label>
+        </div>
+        <div style="margin-top: 12px">
+          <label class="touch-check" style="border-color: var(--success)">
+            <input type="checkbox" id="touch_successful" />
+            <span>✓ Successful Contact</span>
+          </label>
         </div>
       </div>
       <div class="field"><label>Node Color</label><div id="colorPalette" class="palette"></div></div>
