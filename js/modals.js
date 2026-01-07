@@ -175,6 +175,17 @@ window.Modals = (function() {
       dom.searchHelpBackdrop.style.display = 'none';
       dom.searchHelpBackdrop.setAttribute('aria-hidden','true');
     };
+
+    // Shortcuts modal
+    dom.shortcutsBtn.onclick = function() {
+      dom.shortcutsBackdrop.style.display = 'flex';
+      dom.shortcutsBackdrop.setAttribute('aria-hidden','false');
+    };
+
+    dom.closeShortcutsBtn.onclick = function() {
+      dom.shortcutsBackdrop.style.display = 'none';
+      dom.shortcutsBackdrop.setAttribute('aria-hidden','true');
+    };
   }
 
   // Public API

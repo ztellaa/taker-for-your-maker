@@ -12,9 +12,11 @@ window.DOM = (function() {
     // View toggle buttons
     viewMindBtn: $('#viewMind'),
     viewListBtn: $('#viewList'),
+    viewAnalyticsBtn: $('#viewAnalytics'),
 
     // Toolbar buttons
     addRootBtn: $('#addRoot'),
+    shortcutsBtn: $('#shortcutsBtn'),
     addChildBtn: $('#addChild'),
     editNodeBtn: $('#editNode'),
     toggleHighlightBtn: $('#toggleHighlight'),
@@ -38,6 +40,7 @@ window.DOM = (function() {
     // List view
     listView: $('#listView'),
     mindmapView: $('#mindmapView'),
+    analyticsView: $('#analyticsView'),
     taskList: $('#taskList'),
     listSort: $('#listSort'),
     statusFilters: $('#statusFilters'),
@@ -79,6 +82,10 @@ window.DOM = (function() {
     searchHelpBackdrop: $('#searchHelpBackdrop'),
     searchHelpBtn: $('#searchHelpBtn'),
     closeSearchHelpBtn: $('#closeSearchHelp'),
+
+    // Shortcuts modal
+    shortcutsBackdrop: $('#shortcutsBackdrop'),
+    closeShortcutsBtn: $('#closeShortcuts'),
 
     // Stats
     statClients: $('#statClients'),

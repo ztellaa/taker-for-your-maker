@@ -256,6 +256,23 @@ window.Editor = (function() {
     };
 
     dom.saveEditBtn.onclick = function() {
+      // Check if Last Contact changed and enforce touch classification
+      var newLastContact = dom.f_lastcontact.value || '';
+      var isContactTemplate = ['Client', 'COI', 'Opportunity'].indexOf(dom.f_template.value || node.template) !== -1;
+      var lastContactChanged = newLastContact && newLastContact !== originalLastContact;
+
+      if (isContactTemplate && lastContactChanged) {
+        var touchCalls = utils.$('#touch_calls');
+        var touchLinkedIn = utils.$('#touch_linkedin');
+        var touchEmails = utils.$('#touch_emails');
+        var hasSelection = (touchCalls && touchCalls.checked) || (touchLinkedIn && touchLinkedIn.checked) || (touchEmails && touchEmails.checked);
+
+        if (!hasSelection) {
+          alert('Please classify this touch by selecting Call, LinkedIn, or Email before saving.');
+          return;
+        }
+      }
+
       // Capture state before editing
       window.UndoManager.capture('edit', {nodeId: node.id, title: node.title});
 
@@ -362,6 +379,7 @@ window.Editor = (function() {
 
       // Touch recording: if Last Contact changed and a touch checkbox is checked, record it
       var newLastContact = dom.f_lastcontact.value || '';
+      var newNextContact = dom.f_nextcontact.value || '';
       var isContactTemplate = ['Client', 'COI', 'Opportunity'].indexOf(node.template) !== -1;
       var lastContactChanged = newLastContact && newLastContact !== originalLastContact;
 
@@ -380,6 +398,22 @@ window.Editor = (function() {
           if (result.success) {
             // Show toast notification
             window.TouchTracker.showToast('Touch recorded: ' + selectedChannel + ' (' + result.count + '/20 today)');
+          }
+        }
+
+        // Propagate Last Contact and Next Contact to parent if this is an Opportunity or COI
+        if (node.template === 'Opportunity' || node.template === 'COI') {
+          var parentInfo = nodeOps.findNode(node.id);
+          if (parentInfo && parentInfo.parent) {
+            var parent = parentInfo.parent;
+            // Only update parent if it's a Client or COI
+            if (parent.template === 'Client' || parent.template === 'COI') {
+              if (!parent.fields) parent.fields = {};
+              parent.fields['Last Contact'] = newLastContact;
+              if (newNextContact) {
+                parent.fields['Next Contact'] = newNextContact;
+              }
+            }
           }
         }
       }

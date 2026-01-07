@@ -741,6 +741,123 @@
   }
 
 
+  /* Analytics view */
+  #analyticsView {
+    display: none;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  #analyticsView.active {
+    display: block;
+  }
+
+  .analytics-container h2 {
+    margin: 0 0 8px 0;
+    color: var(--rbc-light-blue);
+    font-size: 24px;
+  }
+
+  .analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 24px;
+  }
+
+  .analytics-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .analytics-card h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    color: var(--text);
+  }
+
+  .analytics-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .analytics-stat:last-child {
+    border-bottom: none;
+  }
+
+  .stat-label {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--rbc-light-blue);
+  }
+
+  .analytics-stats-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .analytics-stats-row .analytics-stat {
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 120px;
+  }
+
+  /* Shortcuts modal */
+  .shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+  }
+
+  .shortcut-section h4 {
+    margin: 0 0 12px 0;
+    color: var(--rbc-light-blue);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .shortcut-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .shortcut-item:last-child {
+    border-bottom: none;
+  }
+
+  .shortcut-item kbd {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    color: var(--rbc-light-blue);
+    font-weight: 600;
+  }
+
+  .shortcut-item span {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
   /* Toast notification */
   .toast {
     position: fixed;

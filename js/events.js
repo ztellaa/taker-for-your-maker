@@ -9,20 +9,56 @@ window.Events = (function() {
   function switchToMind() {
     dom.viewMindBtn.classList.add('active');
     dom.viewListBtn.classList.remove('active');
+    dom.viewAnalyticsBtn.classList.remove('active');
     dom.mindmapView.classList.add('active');
     dom.listView.classList.remove('active');
+    dom.analyticsView.classList.remove('active');
   }
 
   function switchToList() {
     dom.viewListBtn.classList.add('active');
     dom.viewMindBtn.classList.remove('active');
+    dom.viewAnalyticsBtn.classList.remove('active');
     dom.listView.classList.add('active');
     dom.mindmapView.classList.remove('active');
+    dom.analyticsView.classList.remove('active');
     state.listFilter = 'now';
     utils.$('#statusFilters .btn').forEach(function(b) {
       b.classList.toggle('active', b.dataset.filter==='now');
     });
     window.Render.buildList();
+  }
+
+  function switchToAnalytics() {
+    dom.viewAnalyticsBtn.classList.add('active');
+    dom.viewMindBtn.classList.remove('active');
+    dom.viewListBtn.classList.remove('active');
+    dom.analyticsView.classList.add('active');
+    dom.mindmapView.classList.remove('active');
+    dom.listView.classList.remove('active');
+    updateAnalyticsView();
+  }
+
+  function updateAnalyticsView() {
+    var totals = window.Analytics.getCurrentWeekTotals();
+    var averages = window.Analytics.getAllTimeAverages();
+    var weekKey = window.Analytics.getCurrentWeekKey();
+
+    // Update today/week totals
+    utils.$('#calls-today').textContent = totals.calls.today + '/20';
+    utils.$('#calls-week').textContent = totals.calls.week + '/100';
+    utils.$('#linkedin-today').textContent = totals.linkedin.today + '/20';
+    utils.$('#linkedin-week').textContent = totals.linkedin.week + '/100';
+    utils.$('#emails-today').textContent = totals.emails.today + '/20';
+    utils.$('#emails-week').textContent = totals.emails.week + '/100';
+
+    // Update averages
+    utils.$('#calls-avg').textContent = averages.calls;
+    utils.$('#linkedin-avg').textContent = averages.linkedin;
+    utils.$('#emails-avg').textContent = averages.emails;
+
+    // Update week label
+    utils.$('#analytics-week-label').textContent = weekKey.replace('bd_week_', '');
   }
 
   // Transform & zoom
@@ -592,6 +628,7 @@ window.Events = (function() {
   function initViewToggles() {
     dom.viewMindBtn.onclick = switchToMind;
     dom.viewListBtn.onclick = switchToList;
+    dom.viewAnalyticsBtn.onclick = switchToAnalytics;
 
     dom.statusFilters.addEventListener('click', function(e) {
       var b = e.target.closest('button');
