@@ -212,6 +212,9 @@ window.Editor = (function() {
     };
 
     dom.saveEditBtn.onclick = function() {
+      // Capture state before editing
+      window.UndoManager.capture('edit', {nodeId: node.id, title: node.title});
+
       // Build temporary node data for validation
       var tempNode = {
         template: dom.f_template.value || node.template,

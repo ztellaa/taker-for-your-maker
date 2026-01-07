@@ -213,6 +213,7 @@ window.Events = (function() {
             var me = found.node;
 
             if(oldParent && oldParent.id !== targetId) {
+              window.UndoManager.capture('move', {nodeId: state.drag.id, oldParentId: oldParent.id, newParentId: targetId});
               var newParent = nodeOps.findNode(targetId).node;
               oldParent.children = oldParent.children.filter(function(c){
                 return c.id !== state.drag.id;
@@ -267,6 +268,7 @@ window.Events = (function() {
     dom.addChildBtn.onclick = function() {
       if(!state.selectedId) return;
       var hadTemplate = !!dom.templateSelect.value;
+      window.UndoManager.capture('add', {parentId: state.selectedId, template: dom.templateSelect.value});
       var childId = nodeOps.addChildOf(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -289,6 +291,7 @@ window.Events = (function() {
 
     dom.toggleHighlightBtn.onclick = function() {
       if(!state.selectedId) return;
+      window.UndoManager.capture('highlight', {nodeId: state.selectedId});
       nodeOps.toggleHighlightCascade(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -297,6 +300,7 @@ window.Events = (function() {
 
     dom.foldBtn.onclick = function() {
       if(!state.selectedId) return;
+      window.UndoManager.capture('fold', {nodeId: state.selectedId});
       nodeOps.toggleFold(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -304,6 +308,8 @@ window.Events = (function() {
 
     dom.deleteNodeBtn.onclick = function() {
       if(!state.selectedId) return;
+      var node = nodeOps.findNode(state.selectedId).node;
+      window.UndoManager.capture('delete', {nodeId: state.selectedId, title: node ? node.title : ''});
       nodeOps.deleteNodeCascade(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -395,6 +401,7 @@ window.Events = (function() {
       var act = btn.dataset.act;
 
       if(act==='add') {
+        window.UndoManager.capture('add', {parentId: id});
         nodeOps.addChildOf(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -406,6 +413,7 @@ window.Events = (function() {
       }
 
       if(act==='hl') {
+        window.UndoManager.capture('highlight', {nodeId: id});
         nodeOps.toggleHighlightCascade(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -413,6 +421,8 @@ window.Events = (function() {
       }
 
       if(act==='del') {
+        var node = nodeOps.findNode(id).node;
+        window.UndoManager.capture('delete', {nodeId: id, title: node ? node.title : ''});
         nodeOps.deleteNodeCascade(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -420,6 +430,7 @@ window.Events = (function() {
       }
 
       if(act==='fold') {
+        window.UndoManager.capture('fold', {nodeId: id});
         nodeOps.toggleFold(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -485,6 +496,7 @@ window.Events = (function() {
 
       if(e.key==='f' || e.key==='F') {
         if(state.selectedId) {
+          window.UndoManager.capture('fold', {nodeId: state.selectedId});
           nodeOps.toggleFold(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
@@ -494,12 +506,28 @@ window.Events = (function() {
 
       if(e.key==='Delete') {
         if(state.selectedId) {
+          var node = nodeOps.findNode(state.selectedId).node;
+          window.UndoManager.capture('delete', {nodeId: state.selectedId, title: node ? node.title : ''});
           nodeOps.deleteNodeCascade(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
           window.Render.buildList();
           e.preventDefault();
         }
+      }
+
+      // Undo: Ctrl+Z
+      if(e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        window.UndoManager.undo();
+        e.preventDefault();
+        return;
+      }
+
+      // Redo: Ctrl+Shift+Z
+      if(e.ctrlKey && e.shiftKey && e.key === 'Z') {
+        window.UndoManager.redo();
+        e.preventDefault();
+        return;
       }
 
       if(e.key==='e' || e.key==='E') {
@@ -511,6 +539,7 @@ window.Events = (function() {
 
       if(e.key==='c' || e.key==='C') {
         if(state.selectedId) {
+          window.UndoManager.capture('add', {parentId: state.selectedId});
           nodeOps.addChildOf(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
@@ -530,6 +559,7 @@ window.Events = (function() {
 
       if(e.key==='h' || e.key==='H') {
         if(state.selectedId) {
+          window.UndoManager.capture('highlight', {nodeId: state.selectedId});
           nodeOps.toggleHighlightCascade(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
