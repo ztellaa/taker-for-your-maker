@@ -539,3 +539,132 @@
     color:var(--text);
     font-weight:600;
   }
+
+  /* Version 13: Validation styles */
+  .validation-error {
+    color: #ef4444;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: #fee;
+    border-left: 3px solid #ef4444;
+    border-radius: 4px;
+  }
+
+  .kv-line.has-error input[data-v] {
+    border-color: #ef4444 !important;
+    background: #fef2f2;
+  }
+
+  .btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* Version 13: Undo/Redo styles */
+  .undo-indicator {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 8px;
+    background: #f0f4f8;
+    border-radius: 6px;
+    user-select: none;
+  }
+
+  /* Version 13: Toast notifications */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+    z-index: 3000;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Version 13: Touch modal styles */
+  .touch-options {
+    display: grid;
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .touch-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .touch-option:hover {
+    background: var(--panel-2);
+    border-color: var(--rbc-light-blue);
+  }
+
+  .touch-option input[type="radio"] {
+    accent-color: var(--rbc-light-blue);
+  }
+
+  .touch-label {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .touch-label strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .touch-label small {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  /* Version 13: Search container */
+  .search-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .modal.small {
+    width: min(480px, 100%);
+  }
+
+  .help-content {
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .help-content code {
+    background: var(--panel-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    color: var(--rbc-light-blue);
+  }
+
+  .help-content ul {
+    margin: 8px 0;
+    padding-left: 24px;
+  }
+
+  .help-content li {
+    margin: 4px 0;
+  }

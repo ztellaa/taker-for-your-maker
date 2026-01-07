@@ -6,6 +6,66 @@ window.Editor = (function() {
   var dom = window.DOM;
   var nodeOps = window.NodeOps;
 
+  // Validation state
+  var validationErrors = {};
+  var currentNodeTemplate = null;
+
+  // Show validation error for a field
+  function showFieldError(kvLine, message) {
+    // Remove existing error if any
+    var existing = kvLine.querySelector('.validation-error');
+    if(existing) existing.remove();
+
+    // Remove has-error class
+    kvLine.classList.remove('has-error');
+
+    if(message) {
+      var errorDiv = document.createElement('div');
+      errorDiv.className = 'validation-error';
+      errorDiv.textContent = message;
+      kvLine.appendChild(errorDiv);
+      kvLine.classList.add('has-error');
+    }
+  }
+
+  // Validate a single KV field
+  function validateKVField(kvLine, template) {
+    var keyInput = utils.$('input[data-k]', kvLine);
+    var valueInput = utils.$('input[data-v]', kvLine);
+    if(!keyInput || !valueInput) return;
+
+    var fieldName = keyInput.value.trim();
+    var fieldValue = valueInput.value.trim();
+
+    if(!fieldName) {
+      showFieldError(kvLine, null);
+      delete validationErrors[fieldName];
+      return;
+    }
+
+    // Get all current fields for dateRange validation
+    var allFields = {};
+    utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
+      var k = utils.$('input[data-k]', line).value.trim();
+      var v = utils.$('input[data-v]', line).value.trim();
+      if(k) allFields[k] = v;
+    });
+
+    // Add special fields
+    allFields['Last Contact'] = dom.f_lastcontact.value;
+    allFields['Next Contact'] = dom.f_nextcontact.value;
+
+    var result = window.Validation.validateField(template, fieldName, fieldValue, allFields);
+
+    if(!result.valid) {
+      showFieldError(kvLine, result.message);
+      validationErrors[fieldName] = result.message;
+    } else {
+      showFieldError(kvLine, null);
+      delete validationErrors[fieldName];
+    }
+  }
+
   function buildPalette(current) {
     dom.colorPalette.innerHTML = '';
     state.selectedPaletteColor = null;
@@ -44,7 +104,18 @@ window.Editor = (function() {
 
     utils.$('button', line).onclick = function() {
       line.remove();
+      // Clear validation error for removed field
+      var fieldName = utils.$('input[data-k]', line).value.trim();
+      if(fieldName) delete validationErrors[fieldName];
     };
+
+    // Add blur validation to value input
+    var valueInput = utils.$('input[data-v]', line);
+    valueInput.addEventListener('blur', function() {
+      if(currentNodeTemplate) {
+        validateKVField(line, currentNodeTemplate);
+      }
+    });
 
     dom.kvArea.appendChild(line);
   }
@@ -52,6 +123,10 @@ window.Editor = (function() {
   function openEditor(id) {
     var node = nodeOps.findNode(id).node;
     if(!node) return;
+
+    // Reset validation state
+    validationErrors = {};
+    currentNodeTemplate = node.template;
 
     dom.f_title.value = node.title || '';
     dom.f_due.value = node.due || '';
@@ -119,8 +194,14 @@ window.Editor = (function() {
     applyVisibility(node.template);
 
     dom.f_template.onchange = function() {
+      currentNodeTemplate = dom.f_template.value;
       setStatusOptions(dom.f_template.value, dom.f_status.value);
       applyVisibility(dom.f_template.value);
+      // Clear validation errors when template changes
+      validationErrors = {};
+      utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
+        showFieldError(line, null);
+      });
     };
 
     dom.editorBackdrop.style.display = 'flex';
@@ -131,6 +212,44 @@ window.Editor = (function() {
     };
 
     dom.saveEditBtn.onclick = function() {
+      // Build temporary node data for validation
+      var tempNode = {
+        template: dom.f_template.value || node.template,
+        fields: {}
+      };
+
+      // Collect all KV fields
+      utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
+        var k = utils.$('input[data-k]', line).value.trim();
+        var v = utils.$('input[data-v]', line).value.trim();
+        if(k) tempNode.fields[k] = v;
+      });
+
+      // Add contact dates if visible
+      var lastContactField = dom.f_lastcontact.closest('.field');
+      var nextContactField = dom.f_nextcontact.closest('.field');
+      if(lastContactField.style.display !== 'none') {
+        tempNode.fields['Last Contact'] = dom.f_lastcontact.value || '';
+      }
+      if(nextContactField.style.display !== 'none') {
+        tempNode.fields['Next Contact'] = dom.f_nextcontact.value || '';
+      }
+
+      // Validate the node
+      var validationResult = window.Validation.validateNode(tempNode);
+      if(!validationResult.valid) {
+        // Show errors inline
+        utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
+          var fieldName = utils.$('input[data-k]', line).value.trim();
+          if(fieldName && validationResult.errors[fieldName]) {
+            showFieldError(line, validationResult.errors[fieldName]);
+          }
+        });
+
+        alert('Please fix validation errors before saving.');
+        return;
+      }
+
       var prevTemplate = node.template;
       var prevStatus = node.status;
 
@@ -173,8 +292,6 @@ window.Editor = (function() {
       });
 
       // Save contact dates if visible
-      var lastContactField = dom.f_lastcontact.closest('.field');
-      var nextContactField = dom.f_nextcontact.closest('.field');
       if(lastContactField.style.display !== 'none') {
         node.fields['Last Contact'] = dom.f_lastcontact.value || '';
       }
