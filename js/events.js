@@ -571,65 +571,19 @@ window.Events = (function() {
   }
 
   function initSearch() {
-    var lastQuery = '';
-
-    function haystack(n) {
-      var parts = [
-        n.title||'',
-        n.template||'',
-        n.status||'',
-        n.due||'',
-        n.notes||'',
-        (n.fields&&n.fields['Tags'])||''
-      ];
-      if(n.fields) {
-        try {
-          for(var k in n.fields) {
-            if(Object.prototype.hasOwnProperty.call(n.fields,k)) {
-              parts.push(String(n.fields[k]));
-            }
-          }
-        } catch(e) {}
-      }
-      return parts.join(' ').toLowerCase();
-    }
-
-    function applyFilter(q) {
-      q = (q||'').trim().toLowerCase();
-      lastQuery = q;
-      var firstHit = null;
-
-      utils.$$('.node', dom.nodeLayer).forEach(function(el) {
-        var id = el.dataset.id;
-        var node = nodeOps.findNode(id).node;
-        var match = !q || haystack(node).indexOf(q)!==-1;
-        el.style.filter = match ? 'none' : 'grayscale(0.2)';
-        el.style.opacity = match ? '1' : '0.45';
-        if(!firstHit && match) firstHit = el;
-      });
-
-      if(firstHit) {
-        var rect = firstHit.getBoundingClientRect();
-        if(rect) {
-          window.Render.selectNode(firstHit.dataset.id);
-          window.Render.highlightSelection();
-        }
-      }
-    }
-
     if(dom.searchInput) {
       dom.searchInput.addEventListener('input', function() {
-        applyFilter(this.value);
+        window.SearchAdvanced.applyToMindMap(this.value);
       });
 
       dom.searchInput.addEventListener('keydown', function(e) {
         if(e.key==='Enter') {
-          applyFilter(this.value);
+          window.SearchAdvanced.applyToMindMap(this.value);
           e.preventDefault();
         }
         if(e.key==='Escape') {
           this.value = '';
-          applyFilter('');
+          window.SearchAdvanced.applyToMindMap('');
         }
       });
     }

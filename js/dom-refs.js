@@ -75,6 +75,11 @@ window.DOM = (function() {
     downloadCSVBtn: $('#downloadCSV'),
     closeMailingBtn: $('#closeMailing'),
 
+    // Search help modal
+    searchHelpBackdrop: $('#searchHelpBackdrop'),
+    searchHelpBtn: $('#searchHelpBtn'),
+    closeSearchHelpBtn: $('#closeSearchHelp'),
+
     // Stats
     statClients: $('#statClients'),
     statAUM: $('#statAUM'),

@@ -164,6 +164,17 @@ window.Modals = (function() {
     dom.downloadCSVBtn.onclick = function() {
       return downloadCSV();
     };
+
+    // Search help modal
+    dom.searchHelpBtn.onclick = function() {
+      dom.searchHelpBackdrop.style.display = 'flex';
+      dom.searchHelpBackdrop.setAttribute('aria-hidden','false');
+    };
+
+    dom.closeSearchHelpBtn.onclick = function() {
+      dom.searchHelpBackdrop.style.display = 'none';
+      dom.searchHelpBackdrop.setAttribute('aria-hidden','true');
+    };
   }
 
   // Public API

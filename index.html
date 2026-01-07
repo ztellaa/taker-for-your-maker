@@ -31,7 +31,10 @@
       <button class="btn" id="foldBtn" type="button">Fold</button>
       <button class="btn danger" id="deleteNode" type="button">Delete</button>
       <button class="btn" id="mailingBtn" type="button">Mailing</button>
-      <input id="search" type="text" placeholder="Search nodes…" />
+      <div class="search-container">
+        <input id="search" type="text" placeholder="Search nodes…" />
+        <button class="btn small" id="searchHelpBtn" type="button" title="Search help">?</button>
+      </div>
     </div>
     <div class="right">
       <div class="toggle" role="tablist" aria-label="View mode">
@@ -183,6 +186,45 @@
   </div>
 </div>
 
+<!-- Search Help Modal -->
+<div class="modal-backdrop" id="searchHelpBackdrop" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="searchHelpTitle">
+    <h3 id="searchHelpTitle">Advanced Search Help</h3>
+    <div class="help-content">
+      <h4>Simple Search</h4>
+      <p>Type any text to search across all fields:</p>
+      <code>john</code>
+
+      <h4>Field-Specific Search</h4>
+      <p>Search specific fields using <strong>field:value</strong> syntax:</p>
+      <code>Email:john@example.com</code><br>
+      <code>template:Client</code><br>
+      <code>status:A-tier</code><br>
+      <code>title:Follow up</code>
+
+      <h4>Numeric Comparisons</h4>
+      <p>Use <strong>&gt;</strong> or <strong>&lt;</strong> for numeric fields:</p>
+      <code>AUM:&gt;1000000</code><br>
+      <code>AUM:&lt;500000</code>
+
+      <h4>Contains Operator</h4>
+      <p>Use <strong>*</strong> for substring matching:</p>
+      <code>Notes:*urgent</code>
+
+      <h4>Multi-Criteria Search</h4>
+      <p>Combine multiple criteria with spaces (AND logic):</p>
+      <code>template:Client status:A-tier</code><br>
+      <code>template:Opportunity AUM:&gt;500000</code>
+
+      <h4>Available Fields</h4>
+      <p>template, status, title, due, notes, freq, Email, Cell Number, AUM, Birthday, Last Contact, Next Contact, Tags, and any custom fields</p>
+    </div>
+    <div class="actions">
+      <button class="btn accent" id="closeSearchHelp" type="button">Got it</button>
+    </div>
+  </div>
+</div>
+
 <div class="hint" id="hint">v12.1: Fixed save button • Standardized template colors • 25px drag threshold • DD/MM/YY format</div>
 
 <!-- Load modules in dependency order -->
@@ -198,6 +240,7 @@
 <script src="js/editor.js"></script>
 <script src="js/modals.js"></script>
 <script src="js/events.js"></script>
+<script src="js/search-advanced.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
