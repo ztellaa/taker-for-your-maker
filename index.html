@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>RBC Wealth Map – v12.1</title>
+<title>RBC Wealth Map – v13.0.3</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -31,13 +31,19 @@
       <button class="btn" id="foldBtn" type="button">Fold</button>
       <button class="btn danger" id="deleteNode" type="button">Delete</button>
       <button class="btn" id="mailingBtn" type="button">Mailing</button>
-      <input id="search" type="text" placeholder="Search nodes…" />
+      <div class="search-container">
+        <input id="search" type="text" placeholder="Search nodes…" />
+        <button class="btn small" id="searchHelpBtn" type="button" title="Search help">?</button>
+      </div>
     </div>
     <div class="right">
       <div class="toggle" role="tablist" aria-label="View mode">
         <button class="btn active" id="viewMind" type="button">Mind Map</button>
         <button class="btn" id="viewList" type="button">Tasks</button>
+        <button class="btn" id="viewAnalytics" type="button">Analytics</button>
       </div>
+      <span id="undoIndicator" class="undo-indicator" title="Undo: Ctrl+Z, Redo: Ctrl+Shift+Z">0 undo</span>
+      <button class="btn" id="shortcutsBtn" type="button" title="Keyboard shortcuts">⌨</button>
       <div class="toggle" aria-label="Zoom">
         <button class="btn" id="zoomOut" type="button">−</button>
         <button class="btn" id="zoomReset" type="button">100%</button>
@@ -99,6 +105,68 @@
     </div>
     <div class="list" id="taskList"></div>
   </section>
+  <section id="analyticsView" aria-label="Analytics Dashboard">
+    <div class="analytics-container">
+      <h2>Weekly Business Development Tracking</h2>
+      <p class="muted">Touch data syncs with weekly tracker (localStorage: bd_week_YYYY-MM-DD)</p>
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <h3>📞 Calls</h3>
+          <div class="analytics-stat">
+            <div class="stat-label">Today</div>
+            <div class="stat-value" id="calls-today">0/20</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="stat-label">This Week</div>
+            <div class="stat-value" id="calls-week">0/100</div>
+          </div>
+        </div>
+        <div class="analytics-card">
+          <h3>💼 LinkedIn</h3>
+          <div class="analytics-stat">
+            <div class="stat-label">Today</div>
+            <div class="stat-value" id="linkedin-today">0/20</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="stat-label">This Week</div>
+            <div class="stat-value" id="linkedin-week">0/100</div>
+          </div>
+        </div>
+        <div class="analytics-card">
+          <h3>📧 Emails</h3>
+          <div class="analytics-stat">
+            <div class="stat-label">Today</div>
+            <div class="stat-value" id="emails-today">0/20</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="stat-label">This Week</div>
+            <div class="stat-value" id="emails-week">0/100</div>
+          </div>
+        </div>
+      </div>
+      <div class="analytics-card" style="margin-top: 20px">
+        <h3>All-Time Averages (per day)</h3>
+        <div class="analytics-stats-row">
+          <div class="analytics-stat">
+            <div class="stat-label">Calls</div>
+            <div class="stat-value" id="calls-avg">0.0</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="stat-label">LinkedIn</div>
+            <div class="stat-value" id="linkedin-avg">0.0</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="stat-label">Emails</div>
+            <div class="stat-value" id="emails-avg">0.0</div>
+          </div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top: 20px; text-align: center">
+        Viewing current week: <span id="analytics-week-label">—</span><br>
+        Full tracker available at: <a href="../import/weekly_business_development_checklist.html" target="_blank">weekly_business_development_checklist.html</a>
+      </div>
+    </div>
+  </section>
 </main>
 
 <!-- Editor Modal -->
@@ -124,6 +192,20 @@
         <option value="biannually">Bi-Annually</option>
         <option value="annually">Annually</option>
       </select></div>
+      <div class="field" id="touchField" style="grid-column:1 / -1;display:none">
+        <label>Touch Details</label>
+        <div class="touch-checkboxes">
+          <label class="touch-check"><input type="checkbox" id="touch_calls" value="calls" /><span>📞 Call</span></label>
+          <label class="touch-check"><input type="checkbox" id="touch_linkedin" value="linkedin" /><span>💼 LinkedIn</span></label>
+          <label class="touch-check"><input type="checkbox" id="touch_emails" value="emails" /><span>📧 Email</span></label>
+        </div>
+        <div style="margin-top: 12px">
+          <label class="touch-check" style="border-color: var(--success)">
+            <input type="checkbox" id="touch_successful" />
+            <span>✓ Successful Contact</span>
+          </label>
+        </div>
+      </div>
       <div class="field"><label>Node Color</label><div id="colorPalette" class="palette"></div></div>
       <div class="field" style="grid-column:1 / -1">
         <label for="f_notes">Notes</label>
@@ -182,19 +264,157 @@
   </div>
 </div>
 
-<div class="hint" id="hint">v12.1: Fixed save button • Standardized template colors • 25px drag threshold • DD/MM/YY format</div>
+<!-- Search Help Modal -->
+<div class="modal-backdrop" id="searchHelpBackdrop" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="searchHelpTitle">
+    <h3 id="searchHelpTitle">Advanced Search Help</h3>
+    <div class="help-content">
+      <h4>Simple Search</h4>
+      <p>Type any text to search across all fields:</p>
+      <code>john</code>
+
+      <h4>Field-Specific Search</h4>
+      <p>Search specific fields using <strong>field:value</strong> syntax:</p>
+      <code>Email:john@example.com</code><br>
+      <code>template:Client</code><br>
+      <code>status:A-tier</code><br>
+      <code>title:Follow up</code>
+
+      <h4>Numeric Comparisons</h4>
+      <p>Use <strong>&gt;</strong> or <strong>&lt;</strong> for numeric fields:</p>
+      <code>AUM:&gt;1000000</code><br>
+      <code>AUM:&lt;500000</code>
+
+      <h4>Contains Operator</h4>
+      <p>Use <strong>*</strong> for substring matching:</p>
+      <code>Notes:*urgent</code>
+
+      <h4>Multi-Criteria Search</h4>
+      <p>Combine multiple criteria with spaces (AND logic):</p>
+      <code>template:Client status:A-tier</code><br>
+      <code>template:Opportunity AUM:&gt;500000</code>
+
+      <h4>Available Fields</h4>
+      <p>template, status, title, due, notes, freq, Email, Cell Number, AUM, Birthday, Last Contact, Next Contact, Tags, and any custom fields</p>
+    </div>
+    <div class="actions">
+      <button class="btn accent" id="closeSearchHelp" type="button">Got it</button>
+    </div>
+  </div>
+</div>
+
+<!-- Touch Modal -->
+<div class="modal-backdrop" id="touchBackdrop" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="touchTitle">
+    <h3 id="touchTitle">Record Touch</h3>
+    <p style="color: var(--muted); margin-bottom: 16px;">Select the contact method used:</p>
+    <div class="touch-checkboxes" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+      <label class="touch-check" style="padding: 12px; cursor: pointer;">
+        <input type="radio" name="touchType" value="calls" id="touchModal_calls" />
+        <span>📞 Call</span>
+      </label>
+      <label class="touch-check" style="padding: 12px; cursor: pointer;">
+        <input type="radio" name="touchType" value="linkedin" id="touchModal_linkedin" />
+        <span>💼 LinkedIn</span>
+      </label>
+      <label class="touch-check" style="padding: 12px; cursor: pointer;">
+        <input type="radio" name="touchType" value="emails" id="touchModal_emails" />
+        <span>📧 Email</span>
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn" id="cancelTouch" type="button">Cancel</button>
+      <button class="btn accent" id="confirmTouch" type="button">Record Touch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard Shortcuts Modal -->
+<div class="modal-backdrop" id="shortcutsBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+    <h3 id="shortcutsTitle">Keyboard Shortcuts</h3>
+    <div class="shortcuts-grid">
+      <div class="shortcut-section">
+        <h4>Navigation</h4>
+        <div class="shortcut-item">
+          <kbd>↑ ↓ ← →</kbd>
+          <span>Navigate nodes</span>
+        </div>
+      </div>
+      <div class="shortcut-section">
+        <h4>Node Actions</h4>
+        <div class="shortcut-item">
+          <kbd>E</kbd>
+          <span>Edit selected node</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>C</kbd>
+          <span>Add child node</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>Delete</kbd>
+          <span>Delete node</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>F</kbd>
+          <span>Fold/unfold node</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>H</kbd>
+          <span>Highlight/flag node</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>D</kbd>
+          <span>Auto-arrange subtree</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>T</kbd>
+          <span>Touch current node</span>
+        </div>
+      </div>
+      <div class="shortcut-section">
+        <h4>Undo/Redo</h4>
+        <div class="shortcut-item">
+          <kbd>Ctrl+Z</kbd>
+          <span>Undo</span>
+        </div>
+        <div class="shortcut-item">
+          <kbd>Ctrl+Shift+Z</kbd>
+          <span>Redo</span>
+        </div>
+      </div>
+      <div class="shortcut-section">
+        <h4>Search</h4>
+        <div class="shortcut-item">
+          <kbd>Esc</kbd>
+          <span>Clear search (in search box)</span>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn accent" id="closeShortcuts" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hint">v13.0.3: Task-only touch workflow • Touch modal with analytics • Shake feedback</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/validation.js"></script>
 <script src="js/dom-refs.js"></script>
 <script src="js/state.js"></script>
+<script src="js/undo.js"></script>
 <script src="js/node-operations.js"></script>
 <script src="js/render.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/touch-tracker.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/modals.js"></script>
 <script src="js/events.js"></script>
+<script src="js/search-advanced.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

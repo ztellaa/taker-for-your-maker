@@ -9,20 +9,56 @@ window.Events = (function() {
   function switchToMind() {
     dom.viewMindBtn.classList.add('active');
     dom.viewListBtn.classList.remove('active');
+    dom.viewAnalyticsBtn.classList.remove('active');
     dom.mindmapView.classList.add('active');
     dom.listView.classList.remove('active');
+    dom.analyticsView.classList.remove('active');
   }
 
   function switchToList() {
     dom.viewListBtn.classList.add('active');
     dom.viewMindBtn.classList.remove('active');
+    dom.viewAnalyticsBtn.classList.remove('active');
     dom.listView.classList.add('active');
     dom.mindmapView.classList.remove('active');
+    dom.analyticsView.classList.remove('active');
     state.listFilter = 'now';
     utils.$('#statusFilters .btn').forEach(function(b) {
       b.classList.toggle('active', b.dataset.filter==='now');
     });
     window.Render.buildList();
+  }
+
+  function switchToAnalytics() {
+    dom.viewAnalyticsBtn.classList.add('active');
+    dom.viewMindBtn.classList.remove('active');
+    dom.viewListBtn.classList.remove('active');
+    dom.analyticsView.classList.add('active');
+    dom.mindmapView.classList.remove('active');
+    dom.listView.classList.remove('active');
+    updateAnalyticsView();
+  }
+
+  function updateAnalyticsView() {
+    var totals = window.Analytics.getCurrentWeekTotals();
+    var averages = window.Analytics.getAllTimeAverages();
+    var weekKey = window.Analytics.getCurrentWeekKey();
+
+    // Update today/week totals
+    utils.$('#calls-today').textContent = totals.calls.today + '/20';
+    utils.$('#calls-week').textContent = totals.calls.week + '/100';
+    utils.$('#linkedin-today').textContent = totals.linkedin.today + '/20';
+    utils.$('#linkedin-week').textContent = totals.linkedin.week + '/100';
+    utils.$('#emails-today').textContent = totals.emails.today + '/20';
+    utils.$('#emails-week').textContent = totals.emails.week + '/100';
+
+    // Update averages
+    utils.$('#calls-avg').textContent = averages.calls;
+    utils.$('#linkedin-avg').textContent = averages.linkedin;
+    utils.$('#emails-avg').textContent = averages.emails;
+
+    // Update week label
+    utils.$('#analytics-week-label').textContent = weekKey.replace('bd_week_', '');
   }
 
   // Transform & zoom
@@ -213,6 +249,7 @@ window.Events = (function() {
             var me = found.node;
 
             if(oldParent && oldParent.id !== targetId) {
+              window.UndoManager.capture('move', {nodeId: state.drag.id, oldParentId: oldParent.id, newParentId: targetId});
               var newParent = nodeOps.findNode(targetId).node;
               oldParent.children = oldParent.children.filter(function(c){
                 return c.id !== state.drag.id;
@@ -267,6 +304,7 @@ window.Events = (function() {
     dom.addChildBtn.onclick = function() {
       if(!state.selectedId) return;
       var hadTemplate = !!dom.templateSelect.value;
+      window.UndoManager.capture('add', {parentId: state.selectedId, template: dom.templateSelect.value});
       var childId = nodeOps.addChildOf(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -289,6 +327,7 @@ window.Events = (function() {
 
     dom.toggleHighlightBtn.onclick = function() {
       if(!state.selectedId) return;
+      window.UndoManager.capture('highlight', {nodeId: state.selectedId});
       nodeOps.toggleHighlightCascade(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -297,6 +336,7 @@ window.Events = (function() {
 
     dom.foldBtn.onclick = function() {
       if(!state.selectedId) return;
+      window.UndoManager.capture('fold', {nodeId: state.selectedId});
       nodeOps.toggleFold(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -304,6 +344,8 @@ window.Events = (function() {
 
     dom.deleteNodeBtn.onclick = function() {
       if(!state.selectedId) return;
+      var node = nodeOps.findNode(state.selectedId).node;
+      window.UndoManager.capture('delete', {nodeId: state.selectedId, title: node ? node.title : ''});
       nodeOps.deleteNodeCascade(state.selectedId);
       window.Storage.markDirty();
       window.Render.renderMindMap();
@@ -365,13 +407,21 @@ window.Events = (function() {
       var nodeEl = e.target.closest('.node');
       if(nodeEl && nodeEl.dataset && nodeEl.dataset.id) {
         window.Render.selectNode(nodeEl.dataset.id);
+        var f = nodeOps.findNode(nodeEl.dataset.id);
+        if(f && f.node && f.node.template === 'Task') {
+          window.Modals.openTouchModal();
+        } else {
+          // Shake the node
+          nodeEl.classList.remove('shake');
+          void nodeEl.offsetWidth;
+          nodeEl.classList.add('shake');
+          setTimeout(function() {
+            nodeEl.classList.remove('shake');
+          }, 400);
+        }
       }
       e.preventDefault();
       e.stopPropagation();
-      nodeOps.touchCurrent();
-      window.Storage.markDirty();
-      window.Render.renderMindMap();
-      window.Render.buildList();
     }, true);
 
     // General node click handler
@@ -395,6 +445,7 @@ window.Events = (function() {
       var act = btn.dataset.act;
 
       if(act==='add') {
+        window.UndoManager.capture('add', {parentId: id});
         nodeOps.addChildOf(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -406,6 +457,7 @@ window.Events = (function() {
       }
 
       if(act==='hl') {
+        window.UndoManager.capture('highlight', {nodeId: id});
         nodeOps.toggleHighlightCascade(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -413,6 +465,8 @@ window.Events = (function() {
       }
 
       if(act==='del') {
+        var node = nodeOps.findNode(id).node;
+        window.UndoManager.capture('delete', {nodeId: id, title: node ? node.title : ''});
         nodeOps.deleteNodeCascade(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -420,6 +474,7 @@ window.Events = (function() {
       }
 
       if(act==='fold') {
+        window.UndoManager.capture('fold', {nodeId: id});
         nodeOps.toggleFold(id);
         window.Storage.markDirty();
         window.Render.renderMindMap();
@@ -471,10 +526,25 @@ window.Events = (function() {
         moveSelection('right');
         e.preventDefault();
       } else if(e.key==='t' || e.key==='T') {
-        nodeOps.touchCurrent();
-        window.Storage.markDirty();
-        window.Render.renderMindMap();
-        window.Render.buildList();
+        if(!state.selectedId) return;
+        var f = nodeOps.findNode(state.selectedId);
+        if(!f || !f.node) return;
+
+        // Only allow touch on Task nodes
+        if(f.node.template === 'Task') {
+          window.Modals.openTouchModal();
+        } else {
+          // Shake the node to indicate invalid action
+          var nodeEl = document.querySelector('.node[data-id="' + state.selectedId + '"]');
+          if(nodeEl) {
+            nodeEl.classList.remove('shake');
+            void nodeEl.offsetWidth; // Trigger reflow to restart animation
+            nodeEl.classList.add('shake');
+            setTimeout(function() {
+              nodeEl.classList.remove('shake');
+            }, 400);
+          }
+        }
         e.preventDefault();
       }
     }, true);
@@ -485,6 +555,7 @@ window.Events = (function() {
 
       if(e.key==='f' || e.key==='F') {
         if(state.selectedId) {
+          window.UndoManager.capture('fold', {nodeId: state.selectedId});
           nodeOps.toggleFold(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
@@ -494,12 +565,28 @@ window.Events = (function() {
 
       if(e.key==='Delete') {
         if(state.selectedId) {
+          var node = nodeOps.findNode(state.selectedId).node;
+          window.UndoManager.capture('delete', {nodeId: state.selectedId, title: node ? node.title : ''});
           nodeOps.deleteNodeCascade(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
           window.Render.buildList();
           e.preventDefault();
         }
+      }
+
+      // Undo: Ctrl+Z
+      if(e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        window.UndoManager.undo();
+        e.preventDefault();
+        return;
+      }
+
+      // Redo: Ctrl+Shift+Z
+      if(e.ctrlKey && e.shiftKey && e.key === 'Z') {
+        window.UndoManager.redo();
+        e.preventDefault();
+        return;
       }
 
       if(e.key==='e' || e.key==='E') {
@@ -511,6 +598,7 @@ window.Events = (function() {
 
       if(e.key==='c' || e.key==='C') {
         if(state.selectedId) {
+          window.UndoManager.capture('add', {parentId: state.selectedId});
           nodeOps.addChildOf(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
@@ -530,6 +618,7 @@ window.Events = (function() {
 
       if(e.key==='h' || e.key==='H') {
         if(state.selectedId) {
+          window.UndoManager.capture('highlight', {nodeId: state.selectedId});
           nodeOps.toggleHighlightCascade(state.selectedId);
           window.Storage.markDirty();
           window.Render.renderMindMap();
@@ -541,65 +630,19 @@ window.Events = (function() {
   }
 
   function initSearch() {
-    var lastQuery = '';
-
-    function haystack(n) {
-      var parts = [
-        n.title||'',
-        n.template||'',
-        n.status||'',
-        n.due||'',
-        n.notes||'',
-        (n.fields&&n.fields['Tags'])||''
-      ];
-      if(n.fields) {
-        try {
-          for(var k in n.fields) {
-            if(Object.prototype.hasOwnProperty.call(n.fields,k)) {
-              parts.push(String(n.fields[k]));
-            }
-          }
-        } catch(e) {}
-      }
-      return parts.join(' ').toLowerCase();
-    }
-
-    function applyFilter(q) {
-      q = (q||'').trim().toLowerCase();
-      lastQuery = q;
-      var firstHit = null;
-
-      utils.$$('.node', dom.nodeLayer).forEach(function(el) {
-        var id = el.dataset.id;
-        var node = nodeOps.findNode(id).node;
-        var match = !q || haystack(node).indexOf(q)!==-1;
-        el.style.filter = match ? 'none' : 'grayscale(0.2)';
-        el.style.opacity = match ? '1' : '0.45';
-        if(!firstHit && match) firstHit = el;
-      });
-
-      if(firstHit) {
-        var rect = firstHit.getBoundingClientRect();
-        if(rect) {
-          window.Render.selectNode(firstHit.dataset.id);
-          window.Render.highlightSelection();
-        }
-      }
-    }
-
     if(dom.searchInput) {
       dom.searchInput.addEventListener('input', function() {
-        applyFilter(this.value);
+        window.SearchAdvanced.applyToMindMap(this.value);
       });
 
       dom.searchInput.addEventListener('keydown', function(e) {
         if(e.key==='Enter') {
-          applyFilter(this.value);
+          window.SearchAdvanced.applyToMindMap(this.value);
           e.preventDefault();
         }
         if(e.key==='Escape') {
           this.value = '';
-          applyFilter('');
+          window.SearchAdvanced.applyToMindMap('');
         }
       });
     }
@@ -608,6 +651,7 @@ window.Events = (function() {
   function initViewToggles() {
     dom.viewMindBtn.onclick = switchToMind;
     dom.viewListBtn.onclick = switchToList;
+    dom.viewAnalyticsBtn.onclick = switchToAnalytics;
 
     dom.statusFilters.addEventListener('click', function(e) {
       var b = e.target.closest('button');

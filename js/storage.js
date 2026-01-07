@@ -11,7 +11,7 @@ window.Storage = (function() {
     state.lastDirty = Date.now();
     try {
       localStorage.setItem('wm.mindmap', JSON.stringify({
-        version: 12.1,
+        version: '13.0.3',
         createdAt: Date.now(),
         map: state.map
       }));
@@ -28,7 +28,7 @@ window.Storage = (function() {
 
   function downloadCurrent() {
     var payload = {
-      version: 12.1,
+      version: '13.0.3',
       createdAt: Date.now(),
       map: state.map
     };
@@ -75,7 +75,7 @@ window.Storage = (function() {
   function snapshotBackup(reason) {
     if(reason===undefined) reason = 'autosave';
     var payload = {
-      version: 12.1,
+      version: '13.0.3',
       createdAt: Date.now(),
       reason: reason,
       map: state.map
@@ -128,7 +128,21 @@ window.Storage = (function() {
       nodeOps.ensureTags(n);
     });
 
-    return {version:12.1, map:m};
+    // Version 13 migration: normalize phone numbers
+    if (version < 13) {
+      nodeOps.bfs(m, function(n) {
+        if (n.fields && n.fields['Cell Number']) {
+          var phone = n.fields['Cell Number'].replace(/\D/g, '');
+          if (phone.length === 10) {
+            n.fields['Cell Number'] = phone.substring(0, 3) + ' ' +
+                                       phone.substring(3, 6) + ' ' +
+                                       phone.substring(6);
+          }
+        }
+      });
+    }
+
+    return {version:13.0, map:m};
   }
 
   function restore() {
