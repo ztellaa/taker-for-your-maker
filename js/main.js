@@ -99,7 +99,6 @@ window.Main = (function() {
     events.initViewToggles();
     editor.init();
     modals.init();
-    window.TouchTracker.init();
     initAutosave();
     initResize();
 

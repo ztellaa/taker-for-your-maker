@@ -698,68 +698,48 @@
     margin: 4px 0;
   }
 
-  /* Touch tracker modal */
-  .touch-options {
+  /* Touch checkboxes in editor */
+  .touch-checkboxes {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin: 16px 0;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 8px;
   }
 
-  .touch-option {
+  .touch-check {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px;
+    gap: 8px;
+    padding: 8px 12px;
     border: 2px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all .2s ease;
+    font-size: 14px;
   }
 
-  .touch-option:hover {
+  .touch-check:hover {
     border-color: var(--rbc-light-blue);
     background: var(--panel);
   }
 
-  .touch-option input[type="radio"] {
-    flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+  .touch-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
     accent-color: var(--rbc-light-blue);
+    cursor: pointer;
   }
 
-  .touch-option input[type="radio"]:checked ~ .touch-label {
-    color: var(--rbc-light-blue);
-  }
-
-  .touch-option:has(input:checked) {
+  .touch-check:has(input:checked) {
     border-color: var(--rbc-light-blue);
     background: var(--panel);
-  }
-
-  .touch-label {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
-  }
-
-  .touch-icon {
-    font-size: 32px;
-    line-height: 1;
-  }
-
-  .touch-name {
     font-weight: 600;
-    font-size: 16px;
-    color: var(--text);
   }
 
-  .touch-desc {
-    font-size: 13px;
-    color: var(--muted);
+  .touch-check span {
+    user-select: none;
   }
+
 
   /* Toast notification */
   .toast {

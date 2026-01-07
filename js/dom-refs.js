@@ -80,11 +80,6 @@ window.DOM = (function() {
     searchHelpBtn: $('#searchHelpBtn'),
     closeSearchHelpBtn: $('#closeSearchHelp'),
 
-    // Touch tracker modal
-    touchBackdrop: $('#touchBackdrop'),
-    skipTouchBtn: $('#skipTouch'),
-    recordTouchBtn: $('#recordTouch'),
-
     // Stats
     statClients: $('#statClients'),
     statAUM: $('#statAUM'),

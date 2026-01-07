@@ -187,15 +187,55 @@ window.Editor = (function() {
       var dueField = dom.f_due.closest('.field');
       var lastContactField = dom.f_lastcontact.closest('.field');
       var nextContactField = dom.f_nextcontact.closest('.field');
+      var touchField = utils.$('#touchField');
+
+      var isContactTemplate = (tmpl==='Client'||tmpl==='COI'||tmpl==='Opportunity');
 
       freqField.style.display = (tmpl==='Client'||tmpl==='COI'||tmpl==='Recurring Contact') ? '' : 'none';
       dueField.style.display = (tmpl==='Task'||tmpl==='Recurring Contact') ? '' : 'none';
-      lastContactField.style.display = (tmpl==='Client'||tmpl==='COI'||tmpl==='Opportunity') ? '' : 'none';
-      nextContactField.style.display = (tmpl==='Client'||tmpl==='COI'||tmpl==='Opportunity') ? '' : 'none';
+      lastContactField.style.display = isContactTemplate ? '' : 'none';
+      nextContactField.style.display = isContactTemplate ? '' : 'none';
+      touchField.style.display = isContactTemplate ? '' : 'none';
     }
 
     setStatusOptions(node.template, node.status||'');
     applyVisibility(node.template);
+
+    // Make touch checkboxes mutually exclusive
+    var touchCheckboxes = [
+      utils.$('#touch_calls'),
+      utils.$('#touch_linkedin'),
+      utils.$('#touch_emails')
+    ];
+
+    touchCheckboxes.forEach(function(checkbox) {
+      if (checkbox) {
+        checkbox.checked = false; // Reset on open
+        checkbox.addEventListener('change', function() {
+          if (this.checked) {
+            touchCheckboxes.forEach(function(other) {
+              if (other !== checkbox) other.checked = false;
+            });
+          }
+        });
+      }
+    });
+
+    // Auto-calculate Next Contact when Last Contact changes
+    dom.f_lastcontact.addEventListener('change', function() {
+      if (this.value) {
+        var lastContact = new Date(this.value);
+        var offsetDays = parseInt(dom.defaultOffsetInput.value) || 7;
+        var nextContact = new Date(lastContact);
+        nextContact.setDate(nextContact.getDate() + offsetDays);
+
+        // Format as YYYY-MM-DD
+        var year = nextContact.getFullYear();
+        var month = String(nextContact.getMonth() + 1).padStart(2, '0');
+        var day = String(nextContact.getDate()).padStart(2, '0');
+        dom.f_nextcontact.value = year + '-' + month + '-' + day;
+      }
+    });
 
     dom.f_template.onchange = function() {
       currentNodeTemplate = dom.f_template.value;
@@ -320,13 +360,28 @@ window.Editor = (function() {
       window.Render.renderMindMap();
       window.Render.buildList();
 
-      // Touch detection: if Last Contact changed for Client/COI/Opportunity, prompt for categorization
+      // Touch recording: if Last Contact changed and a touch checkbox is checked, record it
       var newLastContact = dom.f_lastcontact.value || '';
       var isContactTemplate = ['Client', 'COI', 'Opportunity'].indexOf(node.template) !== -1;
       var lastContactChanged = newLastContact && newLastContact !== originalLastContact;
 
       if (isContactTemplate && lastContactChanged) {
-        window.TouchTracker.openTouchModal();
+        var touchCalls = utils.$('#touch_calls');
+        var touchLinkedIn = utils.$('#touch_linkedin');
+        var touchEmails = utils.$('#touch_emails');
+
+        var selectedChannel = null;
+        if (touchCalls && touchCalls.checked) selectedChannel = 'calls';
+        else if (touchLinkedIn && touchLinkedIn.checked) selectedChannel = 'linkedin';
+        else if (touchEmails && touchEmails.checked) selectedChannel = 'emails';
+
+        if (selectedChannel) {
+          var result = window.Analytics.recordTouch(selectedChannel);
+          if (result.success) {
+            // Show toast notification
+            window.TouchTracker.showToast('Touch recorded: ' + selectedChannel + ' (' + result.count + '/20 today)');
+          }
+        }
       }
     };
 

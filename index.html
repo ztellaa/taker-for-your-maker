@@ -128,6 +128,14 @@
         <option value="biannually">Bi-Annually</option>
         <option value="annually">Annually</option>
       </select></div>
+      <div class="field" id="touchField" style="grid-column:1 / -1;display:none">
+        <label>Record Touch (if Last Contact updated)</label>
+        <div class="touch-checkboxes">
+          <label class="touch-check"><input type="checkbox" id="touch_calls" value="calls" /><span>📞 Call</span></label>
+          <label class="touch-check"><input type="checkbox" id="touch_linkedin" value="linkedin" /><span>💼 LinkedIn</span></label>
+          <label class="touch-check"><input type="checkbox" id="touch_emails" value="emails" /><span>📧 Email</span></label>
+        </div>
+      </div>
       <div class="field"><label>Node Color</label><div id="colorPalette" class="palette"></div></div>
       <div class="field" style="grid-column:1 / -1">
         <label for="f_notes">Notes</label>
@@ -225,51 +233,7 @@
   </div>
 </div>
 
-<!-- Touch Tracker Modal -->
-<div class="modal-backdrop" id="touchBackdrop" aria-hidden="true">
-  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="touchTitle">
-    <h3 id="touchTitle">Categorize Touch</h3>
-    <p class="muted">How did you contact this person?</p>
-    <div class="touch-options">
-      <label class="touch-option">
-        <input type="radio" name="touchChannel" value="calls" />
-        <div class="touch-label">
-          <div class="touch-icon">📞</div>
-          <div>
-            <div class="touch-name">Call</div>
-            <div class="touch-desc">Phone conversation</div>
-          </div>
-        </div>
-      </label>
-      <label class="touch-option">
-        <input type="radio" name="touchChannel" value="linkedin" />
-        <div class="touch-label">
-          <div class="touch-icon">💼</div>
-          <div>
-            <div class="touch-name">LinkedIn</div>
-            <div class="touch-desc">Message or interaction</div>
-          </div>
-        </div>
-      </label>
-      <label class="touch-option">
-        <input type="radio" name="touchChannel" value="emails" />
-        <div class="touch-label">
-          <div class="touch-icon">📧</div>
-          <div>
-            <div class="touch-name">Email</div>
-            <div class="touch-desc">Email correspondence</div>
-          </div>
-        </div>
-      </label>
-    </div>
-    <div class="actions">
-      <button class="btn" id="skipTouch" type="button">Skip</button>
-      <button class="btn accent" id="recordTouch" type="button">Record</button>
-    </div>
-  </div>
-</div>
-
-<div class="hint" id="hint">v13.0: Data validation • Undo/Redo (Ctrl+Z/Shift+Z) • Advanced search (field:value) • Touch tracking</div>
+<div class="hint" id="hint">v13.0.1: Inline touch tracking • Auto-calculated Next Contact • Validation • Undo/Redo • Advanced search</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>
