@@ -192,10 +192,26 @@ window.Events = (function() {
       var rect = dom.stage.getBoundingClientRect();
       var localX = (e.clientX-rect.left)/state.zoom;
       var localY = (e.clientY-rect.top)/state.zoom;
-      var node = nodeOps.findNode(state.drag.id).node;
+
+      var found = nodeOps.findNode(state.drag.id);
+      if(!found || !found.node) {
+        state.drag = null;
+        return;
+      }
+
+      var node = found.node;
       var prevX = node.pos.x, prevY = node.pos.y;
-      node.pos.x = localX - state.drag.offX;
-      node.pos.y = localY - state.drag.offY;
+
+      // Calculate new position with validation
+      var newX = localX - state.drag.offX;
+      var newY = localY - state.drag.offY;
+
+      // Ensure positions are valid numbers
+      if(isNaN(newX) || !isFinite(newX)) newX = prevX;
+      if(isNaN(newY) || !isFinite(newY)) newY = prevY;
+
+      node.pos.x = newX;
+      node.pos.y = newY;
       var dx = node.pos.x - prevX, dy = node.pos.y - prevY;
 
       (function moveAnchored(n) {
@@ -214,6 +230,19 @@ window.Events = (function() {
         card.style.top = node.pos.y + 'px';
       }
 
+      // Highlight potential drop target
+      var path = document.elementsFromPoint(e.clientX, e.clientY);
+      var allNodes = dom.nodeLayer.querySelectorAll('.node');
+      allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
+
+      var targetEl = path.find(function(el){
+        return el.classList && el.classList.contains('node') && el.dataset.id !== state.drag.id;
+      });
+
+      if(targetEl && !nodeOps.isDescendant(state.drag.id, targetEl.dataset.id)) {
+        targetEl.classList.add('drop-target');
+      }
+
       window.Render.drawLinks(new Map(utils.$$('.node', dom.nodeLayer).map(function(el){
         return [el.dataset.id, el];
       })), new Set());
@@ -225,6 +254,10 @@ window.Events = (function() {
       if(!state.drag) return;
       var card = dom.nodeLayer.querySelector('.node[data-id="'+state.drag.id+'"]');
       if(card) card.classList.remove('dragging');
+
+      // Remove drop-target class from all nodes
+      var allNodes = dom.nodeLayer.querySelectorAll('.node');
+      allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
 
       // Calculate drag distance
       var dragDistance = 0;
@@ -249,12 +282,17 @@ window.Events = (function() {
             var me = found.node;
 
             if(oldParent && oldParent.id !== targetId) {
-              window.UndoManager.capture('move', {nodeId: state.drag.id, oldParentId: oldParent.id, newParentId: targetId});
               var newParent = nodeOps.findNode(targetId).node;
-              oldParent.children = oldParent.children.filter(function(c){
-                return c.id !== state.drag.id;
-              });
-              newParent.children.push(me);
+
+              // Confirmation popup before changing parent
+              var confirmMsg = 'Move "' + me.title + '" to become a child of "' + newParent.title + '"?';
+              if(confirm(confirmMsg)) {
+                window.UndoManager.capture('move', {nodeId: state.drag.id, oldParentId: oldParent.id, newParentId: targetId});
+                oldParent.children = oldParent.children.filter(function(c){
+                  return c.id !== state.drag.id;
+                });
+                newParent.children.push(me);
+              }
             }
           }
         }
@@ -268,8 +306,22 @@ window.Events = (function() {
     });
 
     dom.nodeLayer.addEventListener('pointercancel', function() {
+      // Clean up drag state and visual indicators
+      if(state.drag) {
+        var card = dom.nodeLayer.querySelector('.node[data-id="'+state.drag.id+'"]');
+        if(card) card.classList.remove('dragging');
+      }
+
+      // Remove drop-target class from all nodes
+      var allNodes = dom.nodeLayer.querySelectorAll('.node');
+      allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
+
       state.drag = null;
       state.dragStartPos = null;
+
+      // Re-render to ensure consistent state
+      window.Render.renderMindMap();
+      window.Render.buildList();
     });
   }
 

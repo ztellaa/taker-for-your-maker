@@ -137,29 +137,59 @@ window.NodeOps = (function() {
     var root = findNode(rootId).node;
     if(!root) return;
 
+    // First, fold all grandchildren (children of root's children)
+    if(root.children) {
+      root.children.forEach(function(child) {
+        if(child.children && child.children.length > 0) {
+          child.collapsed = true;
+        }
+      });
+    }
+
     var gapX = 300, gapY = 100;
+    var maxPerColumn = 8;
     var start = depthOf(rootId);
     var origin = {x:root.pos.x, y:root.pos.y};
-    var nextY = {};
+    var columnCounts = {};
+    var columnOffsets = {};
+
+    function getColumnOffset(depth) {
+      if(columnOffsets[depth] === undefined) {
+        columnOffsets[depth] = 0;
+      }
+      return columnOffsets[depth];
+    }
+
+    function incrementColumn(depth) {
+      if(columnCounts[depth] === undefined) {
+        columnCounts[depth] = 0;
+      }
+      columnCounts[depth]++;
+      if(columnCounts[depth] >= maxPerColumn) {
+        columnCounts[depth] = 0;
+        columnOffsets[depth] = (columnOffsets[depth] || 0) + 1;
+      }
+    }
 
     function setPos(n, depth, y) {
-      n.pos.x = origin.x + (depth-start)*gapX;
-      n.pos.y = y;
+      var colOffset = getColumnOffset(depth);
+      n.pos.x = origin.x + (depth-start)*gapX + colOffset*gapX;
+      n.pos.y = y + (colOffset * maxPerColumn * gapY);
       if(n!==root) n.anchored = true;
     }
 
     function place(n, depth) {
       if(n.collapsed) {
-        var y0 = (nextY[depth]!=null ? nextY[depth] : root.pos.y);
-        setPos(n, depth, y0);
-        nextY[depth] = y0 + gapY;
+        var baseY = origin.y + (columnCounts[depth] || 0) * gapY;
+        setPos(n, depth, baseY);
+        incrementColumn(depth);
         return {top:n.pos.y, bottom:n.pos.y};
       }
 
       if(n.children.length===0) {
-        var y = (nextY[depth]!=null ? nextY[depth] : root.pos.y);
+        var y = origin.y + (columnCounts[depth] || 0) * gapY;
         setPos(n, depth, y);
-        nextY[depth] = y + gapY;
+        incrementColumn(depth);
         return {top:y, bottom:y};
       }
 
@@ -171,9 +201,9 @@ window.NodeOps = (function() {
       }
 
       var mid = (top+bottom)/2;
-      var y2 = Math.max(mid, (nextY[depth]!=null ? nextY[depth] : root.pos.y));
+      var y2 = Math.max(mid, origin.y + (columnCounts[depth] || 0) * gapY);
       setPos(n, depth, y2);
-      nextY[depth] = y2 + gapY;
+      incrementColumn(depth);
       return {top:Math.min(top,y2), bottom:Math.max(bottom,y2)};
     }
 
@@ -211,6 +241,33 @@ window.NodeOps = (function() {
     });
     var dues = direct.concat(fromSubtrees).map(function(t){ return t.due; }).filter(Boolean).sort();
     return dues[0]||'';
+  }
+
+  function cumulativeAUM(n) {
+    var total = 0;
+
+    function collectAUM(node) {
+      if(node.fields && node.fields.AUM) {
+        var aumVal = parseFloat(String(node.fields.AUM).replace(/[,$]/g, ''));
+        if(!isNaN(aumVal)) {
+          total += aumVal;
+        }
+      }
+
+      if(node.children) {
+        node.children.forEach(function(child) {
+          collectAUM(child);
+        });
+      }
+    }
+
+    if(n.children) {
+      n.children.forEach(function(child) {
+        collectAUM(child);
+      });
+    }
+
+    return total;
   }
 
   function crumbsOf(id) {
@@ -444,6 +501,7 @@ window.NodeOps = (function() {
     tidySubtree: tidySubtree,
     propagateProxyHighlights: propagateProxyHighlights,
     nextDueForCard: nextDueForCard,
+    cumulativeAUM: cumulativeAUM,
     crumbsOf: crumbsOf,
     ensureScaffolding: ensureScaffolding,
     ensureTags: ensureTags,
