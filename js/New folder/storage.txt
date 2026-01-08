@@ -6,13 +6,13 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '13.0.5';
+  var CURRENT_VERSION = '13.0.4';
 
   function markDirty() {
     state.lastDirty = Date.now();
     try {
       localStorage.setItem('wm.mindmap', JSON.stringify({
-version: CURRENT_VERSION,
+        version: CURRENT_VERSION,
         createdAt: Date.now(),
         map: state.map
       }));
@@ -29,7 +29,7 @@ version: CURRENT_VERSION,
 
   function downloadCurrent() {
     var payload = {
-version: CURRENT_VERSION,
+      version: CURRENT_VERSION,
       createdAt: Date.now(),
       map: state.map
     };
@@ -76,7 +76,7 @@ version: CURRENT_VERSION,
   function snapshotBackup(reason) {
     if(reason===undefined) reason = 'autosave';
     var payload = {
-version: CURRENT_VERSION,
+      version: CURRENT_VERSION,
       createdAt: Date.now(),
       reason: reason,
       map: state.map

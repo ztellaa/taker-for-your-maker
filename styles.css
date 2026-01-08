@@ -217,7 +217,7 @@
     position:absolute;
     width:var(--node-w);
     background:var(--panel);
-    border:1px solid var(--border);
+    border:2px solid var(--border);
     border-radius:12px;
     padding:var(--node-pad);
     box-shadow:0 4px 12px rgba(0,0,0,.3);
@@ -744,9 +744,10 @@
   /* Analytics view */
   #analyticsView {
     display: none;
-    padding: 24px;
-    max-width: 1200px;
-    margin: 0 auto;
+    padding: 24px 15%;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   #analyticsView.active {
@@ -757,11 +758,16 @@
     margin: 0 0 8px 0;
     color: var(--rbc-light-blue);
     font-size: 24px;
+    text-align: center;
+  }
+
+  .analytics-container > .muted:first-of-type {
+    text-align: center;
   }
 
   .analytics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 20px;
     margin-top: 24px;
   }
@@ -891,7 +897,7 @@
     animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
   }
 
-  /* Pulsing glow for drop target */
+/* Pulsing glow for drop target */
   @keyframes pulseGlow {
     0%, 100% {
       box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.6),
@@ -906,4 +912,82 @@
   .node.drop-target {
     border: 3px solid white !important;
     animation: pulseGlow 1.2s ease-in-out infinite;
+  }
+
+  /* Task completed styling */
+  .node.task-done {
+    background: linear-gradient(135deg, #1a3d1a, #0f2d0f) !important;
+    border-color: #2d5a2d !important;
+  }
+
+  .node.task-done:hover {
+    border-color: #4CAF50 !important;
+  }
+
+  /* Touch card status styling */
+  /* Not Completed - Red */
+  .node.touch-not-completed {
+    background: linear-gradient(135deg, #3d1a1a, #2d0f0f) !important;
+    border-color: #5a2d2d !important;
+  }
+
+  .node.touch-not-completed:hover {
+    border-color: #ef4444 !important;
+  }
+
+  /* Attempted - Yellow/Orange */
+  .node.touch-attempted {
+    background: linear-gradient(135deg, #3d3a1a, #2d2a0f) !important;
+    border-color: #5a5a2d !important;
+  }
+
+  .node.touch-attempted:hover {
+    border-color: #f59e0b !important;
+  }
+
+  /* Completed - Green */
+  .node.touch-completed {
+    background: linear-gradient(135deg, #1a3d1a, #0f2d0f) !important;
+    border-color: #2d5a2d !important;
+  }
+
+  .node.touch-completed:hover {
+    border-color: #4CAF50 !important;
+  }
+
+  /* Touch card notes preview */
+  .touch-notes-preview {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Hide non-essential buttons on Touch cards - only show Flag and Edit */
+  .node[data-template="Touch"] .actions .btn:not([data-act="hl"]):not([data-act="edit"]) {
+    display: none;
+  }
+
+  /* Disabled channel radio buttons */
+  .touch-check:has(input:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .touch-check:has(input:disabled):hover {
+    border-color: var(--border);
+    background: transparent;
+  }
+
+  /* Touch aggregated notes in Task cards */
+  .task-touch-notes {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border);
+  }
+
+  .task-touch-notes div {
+    margin: 2px 0;
   }

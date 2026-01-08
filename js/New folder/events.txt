@@ -254,24 +254,13 @@ window.Events = (function() {
       var rect = dom.stage.getBoundingClientRect();
       var localX = (e.clientX-rect.left)/state.zoom;
       var localY = (e.clientY-rect.top)/state.zoom;
-
-      var found = nodeOps.findNode(state.drag.id);
-      if(!found || !found.node) {
-        state.drag = null;
-        return;
-      }
-
-      var node = found.node;
+      var node = nodeOps.findNode(state.drag.id).node;
       var prevX = node.pos.x, prevY = node.pos.y;
 
       var intendedPos = {
         x: localX - state.drag.offX,
         y: localY - state.drag.offY
       };
-
-      // Ensure positions are valid numbers
-      if(isNaN(intendedPos.x) || !isFinite(intendedPos.x)) intendedPos.x = prevX;
-      if(isNaN(intendedPos.y) || !isFinite(intendedPos.y)) intendedPos.y = prevY;
 
       // Adjust position to prevent overlap (unless near center for reparenting)
       var adjustedPos = adjustForOverlap(intendedPos, state.drag.id);
@@ -296,19 +285,6 @@ window.Events = (function() {
         card.style.top = node.pos.y + 'px';
       }
 
-      // Highlight potential drop target
-      var path = document.elementsFromPoint(e.clientX, e.clientY);
-      var allNodes = dom.nodeLayer.querySelectorAll('.node');
-      allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
-
-      var targetEl = path.find(function(el){
-        return el.classList && el.classList.contains('node') && el.dataset.id !== state.drag.id;
-      });
-
-      if(targetEl && !nodeOps.isDescendant(state.drag.id, targetEl.dataset.id)) {
-        targetEl.classList.add('drop-target');
-      }
-
       window.Render.drawLinks(new Map(utils.$$('.node', dom.nodeLayer).map(function(el){
         return [el.dataset.id, el];
       })), new Set());
@@ -320,10 +296,6 @@ window.Events = (function() {
       if(!state.drag) return;
       var card = dom.nodeLayer.querySelector('.node[data-id="'+state.drag.id+'"]');
       if(card) card.classList.remove('dragging');
-
-      // Remove drop-target class from all nodes
-      var allNodes = dom.nodeLayer.querySelectorAll('.node');
-      allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
 
       // Calculate drag distance
       var dragDistance = 0;
@@ -355,17 +327,12 @@ window.Events = (function() {
             var me = found.node;
 
             if(oldParent && oldParent.id !== targetId) {
+              window.UndoManager.capture('move', {nodeId: state.drag.id, oldParentId: oldParent.id, newParentId: targetId});
               var newParent = nodeOps.findNode(targetId).node;
-
-              // Confirmation popup before changing parent
-              var confirmMsg = 'Move "' + me.title + '" to become a child of "' + newParent.title + '"?';
-              if(confirm(confirmMsg)) {
-                window.UndoManager.capture('move', {nodeId: state.drag.id, oldParentId: oldParent.id, newParentId: targetId});
-                oldParent.children = oldParent.children.filter(function(c){
-                  return c.id !== state.drag.id;
-                });
-                newParent.children.push(me);
-              }
+              oldParent.children = oldParent.children.filter(function(c){
+                return c.id !== state.drag.id;
+              });
+              newParent.children.push(me);
             }
           }
         }
@@ -379,22 +346,8 @@ window.Events = (function() {
     });
 
     dom.nodeLayer.addEventListener('pointercancel', function() {
-      // Clean up drag state and visual indicators
-      if(state.drag) {
-        var card = dom.nodeLayer.querySelector('.node[data-id="'+state.drag.id+'"]');
-        if(card) card.classList.remove('dragging');
-      }
-
-      // Remove drop-target class from all nodes
-      var allNodes = dom.nodeLayer.querySelectorAll('.node');
-      allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
-
       state.drag = null;
       state.dragStartPos = null;
-
-      // Re-render to ensure consistent state
-      window.Render.renderMindMap();
-      window.Render.buildList();
     });
   }
 
