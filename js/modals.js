@@ -65,19 +65,19 @@ window.Modals = (function() {
       var company = (n.fields['Employer'] || '').trim();
       var tags = (n.fields['Tags'] || '').toLowerCase();
 
-      var isClient = n.template==='Client';
-      var isOpp = n.template==='Opportunity';
-      var isCOI = n.template==='COI';
+      var isContact = n.template==='Contact';
 
       var include = false;
-      if(mode==='clientsOpps') {
-        include = (isClient || isOpp);
-      } else if(mode==='clientsCoi') {
-        include = (isClient || isCOI);
+      if(mode==='allContacts') {
+        include = isContact;
       } else if(mode==='byTags') {
-        include = tagSet.size===0 ? true : Array.from(tagSet).every(function(t){
+        include = isContact && (tagSet.size===0 ? true : Array.from(tagSet).every(function(t){
           return tags.indexOf(t)!==-1;
-        });
+        }));
+      } else if(mode==='byTier') {
+        // Filter by status tier (A-tier, B-tier, C-tier, Dormant)
+        var tier = dom.tagsFilter.value.trim().toLowerCase();
+        include = isContact && (!tier || (n.status || '').toLowerCase().indexOf(tier) !== -1);
       }
 
       if(include) {
@@ -187,49 +187,6 @@ window.Modals = (function() {
       dom.shortcutsBackdrop.setAttribute('aria-hidden','true');
     };
 
-    // Touch modal
-    dom.cancelTouchBtn.onclick = function() {
-      dom.touchBackdrop.style.display = 'none';
-      dom.touchBackdrop.setAttribute('aria-hidden','true');
-      // Clear radio selections
-      var radios = document.querySelectorAll('input[name="touchType"]');
-      radios.forEach(function(r) { r.checked = false; });
-    };
-
-    dom.confirmTouchBtn.onclick = function() {
-      // Get selected channel
-      var selected = document.querySelector('input[name="touchType"]:checked');
-      if(!selected) {
-        alert('Please select a contact method');
-        return;
-      }
-
-      var channel = selected.value;
-      var result = nodeOps.touchCurrent(channel);
-
-      if(result.success) {
-        dom.touchBackdrop.style.display = 'none';
-        dom.touchBackdrop.setAttribute('aria-hidden','true');
-        // Clear selections
-        var radios = document.querySelectorAll('input[name="touchType"]');
-        radios.forEach(function(r) { r.checked = false; });
-        // Select the newly created touch note
-        if(result.noteId) {
-          window.Render.selectNode(result.noteId);
-        }
-        window.Storage.markDirty();
-        window.Render.renderMindMap();
-        window.Render.buildList();
-      } else {
-        alert('Unable to record touch. Please try again.');
-      }
-    };
-  }
-
-  // Open touch modal
-  function openTouchModal() {
-    dom.touchBackdrop.style.display = 'flex';
-    dom.touchBackdrop.setAttribute('aria-hidden','false');
   }
 
   // Public API
@@ -238,7 +195,6 @@ window.Modals = (function() {
     computeAudience: computeAudience,
     refreshMailingPreview: refreshMailingPreview,
     downloadCSV: downloadCSV,
-    openTouchModal: openTouchModal,
     init: init
   };
 })();

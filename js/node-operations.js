@@ -22,14 +22,22 @@ window.NodeOps = (function() {
     if(tmpl===undefined) tmpl="";
     if(parent===undefined) parent=null;
 
-    var effective = tmpl || (parent && parent.template) || 'Client';
+    var effective = tmpl || (parent && parent.template) || 'Contact';
     var base = (parent && parent.pos) || {x:0,y:0};
     var tFields = (config.Templates[effective] && config.Templates[effective].fields) ?
       (function(o){var c={}; for(var k in o){ if(Object.prototype.hasOwnProperty.call(o,k)) c[k]=o[k]; } return c;})(config.Templates[effective].fields) : {};
     if(!tFields['Tags']) tFields['Tags']='';
 
     var color = (parent && parent.template==='Sub-Tree') ? (parent.color||defaultColorForTemplate(effective)) : defaultColorForTemplate(effective);
-    var defaultStatus = (effective==='Task'||effective==='Recurring Contact') ? 'todo' : (['Client','COI','Opportunity'].indexOf(effective)!==-1 ? 'A-tier' : '');
+
+    // Set default status based on template
+    var defaultStatus = '';
+    if (effective === 'Task') {
+      defaultStatus = 'todo';
+    } else if (effective === 'Contact') {
+      defaultStatus = 'A-tier';
+    }
+    // Touch uses fields['Status'] instead of node.status
 
     var node = {
       id: utils.uuid(),
@@ -51,16 +59,15 @@ window.NodeOps = (function() {
 
     ensureTags(node);
 
-    if(['Client','COI'].indexOf(node.template)!==-1) {
-      var rcTree = newNode('Recurring Contacts','Sub-Tree',node);
-      var rc = newNode('Recurring Contact','Recurring Contact',rcTree);
-      rc.fields['Frequency'] = node.freq || 'quarterly';
-      var daysMap = {monthly:30,quarterly:90,biannually:182,annually:365};
-      var days = daysMap[rc.fields['Frequency']]||90;
-      rc.due = new Date(Date.now()+days*86400000).toISOString().slice(0,10);
-      rcTree.children.push(rc);
-      var tasksTree = newNode('Tasks','Sub-Tree',node);
-      node.children.push(rcTree, tasksTree);
+    // Set due date to today for Touch nodes
+    if (node.template === 'Touch') {
+      node.due = utils.today();
+    }
+
+    // Auto-scaffolding for Contact template - only create Tasks Sub-Tree
+    if (node.template === 'Contact') {
+      var tasksTree = newNode('Tasks', 'Sub-Tree', node);
+      node.children.push(tasksTree);
     }
 
     return node;
@@ -113,13 +120,14 @@ window.NodeOps = (function() {
         var base = (p && p.pos) || {x:0,y:0};
         n.pos = {x:base.x+280, y:base.y+(p?p.children.indexOf(n)*100:0)};
       }
-      if(!n.color) n.color = defaultColorForTemplate(n.template||'Client');
+      if(!n.color) n.color = defaultColorForTemplate(n.template||'Contact');
       if(typeof n.collapsed!=='boolean') n.collapsed = false;
       if(typeof n.anchored!=='boolean') n.anchored = false;
       if(typeof n.proxyHighlight!=='boolean') n.proxyHighlight = false;
       if(n.freq==null) n.freq = '';
 
-      if(n.template==='Client'||n.template==='COI'||n.template==='Opportunity') {
+      // Contact-specific field initialization
+      if(n.template==='Contact') {
         n.fields['Email'] = n.fields['Email']||'';
         n.fields['Cell Number'] = n.fields['Cell Number']||'';
         n.fields['Lead Source'] = n.fields['Lead Source']||'';
@@ -128,7 +136,16 @@ window.NodeOps = (function() {
         n.fields['Salesforce'] = n.fields['Salesforce']||'';
         n.fields['Last Contact'] = n.fields['Last Contact']||'';
         n.fields['Next Contact'] = n.fields['Next Contact']||'';
+        n.fields['LinkedIn'] = n.fields['LinkedIn']||'';
+        n.fields['Activity Offset'] = n.fields['Activity Offset']||'';
       }
+
+      // Touch-specific field initialization
+      if(n.template==='Touch') {
+        n.fields['Touch Type'] = n.fields['Touch Type']||'';
+        n.fields['Status'] = n.fields['Status']||'Not Completed';
+      }
+
       ensureTags(n);
     });
   }
@@ -205,9 +222,9 @@ window.NodeOps = (function() {
   }
 
   function nextDueForCard(n) {
-    var direct = (n.children||[]).filter(function(c){ return c.template==='Task'||c.template==='Recurring Contact'; });
+    var direct = (n.children||[]).filter(function(c){ return c.template==='Task'; });
     var fromSubtrees = (n.children||[]).filter(function(c){ return c.template==='Sub-Tree'; }).flatMap(function(st){
-      return (st.children||[]).filter(function(x){ return x.template==='Task'||x.template==='Recurring Contact'; });
+      return (st.children||[]).filter(function(x){ return x.template==='Task'; });
     });
     var dues = direct.concat(fromSubtrees).map(function(t){ return t.due; }).filter(Boolean).sort();
     return dues[0]||'';
@@ -228,31 +245,10 @@ window.NodeOps = (function() {
     return out;
   }
 
-  // Scaffolding
+  // Scaffolding - ensures Contact nodes have Tasks Sub-Tree
   function ensureScaffolding() {
     bfs(state.map, function(n){
-      if(n.template==='Client'||n.template==='COI') {
-        var rcTree = n.children.find(function(c){ return c.template==='Sub-Tree' && /^Recurring Contacts$/i.test(c.title); });
-        if(!rcTree) {
-          rcTree = newNode('Recurring Contacts','Sub-Tree',n);
-          n.children.unshift(rcTree);
-        }
-
-        var stray = n.children.filter(function(c){ return c.template==='Recurring Contact'; });
-        stray.forEach(function(c){
-          n.children = n.children.filter(function(x){ return x!==c; });
-          rcTree.children.push(c);
-        });
-
-        if(rcTree.children.filter(function(c){ return c.template==='Recurring Contact'; }).length===0) {
-          var rc = newNode('Recurring Contact','Recurring Contact',rcTree);
-          rc.fields['Frequency'] = n.freq||'quarterly';
-          var daysMap = {monthly:30,quarterly:90,biannually:182,annually:365};
-          var days = daysMap[rc.fields['Frequency']]||90;
-          rc.due = new Date(Date.now()+days*86400000).toISOString().slice(0,10);
-          rcTree.children.push(rc);
-        }
-
+      if(n.template==='Contact') {
         var tasksTree = n.children.find(function(c){ return c.template==='Sub-Tree' && /^Tasks$/i.test(c.title); });
         if(!tasksTree) {
           tasksTree = newNode('Tasks','Sub-Tree',n);
@@ -267,14 +263,22 @@ window.NodeOps = (function() {
     var parent = findNode(parentId).node;
     if(!parent) return;
 
-    var tmpl = window.DOM.templateSelect.value || parent.template || 'Client';
-    if(!window.DOM.templateSelect.value && (parent.template==='Account'||parent.template==='Opportunity'||parent.template==='COI'||parent.template==='Client')) {
+    var tmpl = window.DOM.templateSelect.value || parent.template || 'Contact';
+
+    // Default to Task for Contact, Account nodes when no template explicitly selected
+    if(!window.DOM.templateSelect.value && (parent.template==='Account'||parent.template==='Contact')) {
       tmpl = 'Task';
+    }
+
+    // Default to Touch for Task nodes when no template explicitly selected
+    if(!window.DOM.templateSelect.value && parent.template==='Task') {
+      tmpl = 'Touch';
     }
 
     var child = newNode(tmpl?tmpl:'New node', tmpl, parent);
 
-    if((tmpl==='Task'||tmpl==='Recurring Contact') && !child.due) {
+    // Set due date for Task nodes
+    if(tmpl==='Task' && !child.due) {
       var days = Math.max(0, parseInt(window.DOM.defaultOffsetInput.value||'7',10));
       var dt = new Date(Date.now()+days*86400000);
       child.due = dt.toISOString().slice(0,10);
@@ -309,7 +313,7 @@ window.NodeOps = (function() {
     if(!ok) return;
 
     if(state.map.id===id) {
-      state.map = newNode('Root','Client',null);
+      state.map = newNode('Root','Contact',null);
       state.map.pos = {x:0,y:0};
       state.selectedId = state.map.id;
     } else {
@@ -318,118 +322,239 @@ window.NodeOps = (function() {
     }
   }
 
-  // Recurring contact
-  function tapRecurringFor(id) {
-    var node = findNode(id).node;
-    if(!node) return;
-    ensureScaffolding();
-
-    var rcTree = node.children.find(function(c){ return c.template==='Sub-Tree' && /^Recurring Contacts$/i.test(c.title); });
-    if(!rcTree) {
-      rcTree = newNode('Recurring Contacts','Sub-Tree',node);
-      node.children.unshift(rcTree);
+  // Get available contact channels from parent Contact
+  function getAvailableChannels(taskNode) {
+    if(!taskNode || taskNode.template !== 'Task') {
+      return { call: true, email: true, linkedin: true }; // Default all enabled if not a task
     }
 
-    var list = rcTree.children.filter(function(c){ return c.template==='Recurring Contact'; });
-    if(list.length===0) {
-      var first = newNode('Recurring Contact','Recurring Contact',rcTree);
-      first.fields['Frequency'] = node.freq||'quarterly';
-      first.due = utils.advanceDate(utils.today(), utils.freqToDays(first.fields['Frequency']));
-      rcTree.children.push(first);
-      list = [first];
-    }
+    // Find parent Contact (may be through Sub-Tree)
+    var taskInfo = findNode(taskNode.id);
+    var parent = taskInfo.parent;
+    var contact = null;
 
-    list.sort(function(a,b){ return (a.due||'9999-12-31').localeCompare(b.due||'9999-12-31'); });
-    var cur = list.find(function(x){ return x.status!=='done'; }) || list[0];
-    if(!cur.due) cur.due = utils.today();
-
-    var prevStatus = cur.status;
-    cur.status = 'done';
-    if(prevStatus!=='done') onStatusChange(cur);
-  }
-
-  function onStatusChange(n) {
-    if((n.template==='Recurring Contact'||n.template==='Task') && (n.freq||n.fields['Frequency']) && n.status==='done') {
-      var parent = findNode(n.id).parent;
-      if(!parent) return;
-
-      var freq = n.freq || n.fields['Frequency'];
-      var next = newNode(n.title, n.template, parent);
-      next.freq = freq;
-      next.fields = (function(o){var c={}; for(var k in o){ if(Object.prototype.hasOwnProperty.call(o,k)) c[k]=o[k]; } return c;})(n.fields);
-      next.due = utils.advanceDate(n.due||utils.today(), utils.freqToDays(freq));
-      parent.children.push(next);
-    }
-  }
-
-  // Touch function
-  function randomNodeColor(tmpl) {
-    try {
-      if(Array.isArray(config.Palette) && config.Palette.length) {
-        return config.Palette[Math.floor(Math.random()*config.Palette.length)];
+    if(parent && parent.template === 'Contact') {
+      contact = parent;
+    } else if(parent && parent.template === 'Sub-Tree') {
+      var grandparent = findNode(parent.id).parent;
+      if(grandparent && grandparent.template === 'Contact') {
+        contact = grandparent;
       }
-    } catch(e) {}
-    return defaultColorForTemplate(tmpl||'Note');
-  }
-
-  function touchCurrent(channel) {
-    if(!state.selectedId) return { success: false, reason: 'no-selection' };
-    var f = findNode(state.selectedId);
-    if(!f || !f.node) return { success: false, reason: 'node-not-found' };
-
-    var n = f.node;
-
-    // Only allow touch on Task nodes
-    if(n.template !== 'Task') {
-      return { success: false, reason: 'not-task' };
     }
 
-    if(!n.fields) n.fields = {};
-    n.fields['Last Contact'] = utils.today();
+    if(!contact) {
+      return { call: true, email: true, linkedin: true }; // Default all enabled if no contact found
+    }
 
-    // Map channel to display name
-    var channelNames = {
-      calls: '📞 Call',
-      linkedin: '💼 LinkedIn',
-      emails: '📧 Email'
+    return {
+      call: !!(contact.fields['Cell Number'] || contact.fields['Phone'] || '').trim(),
+      email: !!(contact.fields['Email'] || '').trim(),
+      linkedin: !!(contact.fields['LinkedIn'] || contact.fields['Salesforce'] || '').trim()
     };
-    var channelDisplay = channelNames[channel] || 'Touch';
+  }
 
-    var note = newNode(channelDisplay + ' - ' + utils.today(), 'Note', n);
-    note.color = randomNodeColor('Note');
-    note.notes = 'Touched on ' + utils.today() + ' via ' + channelDisplay;
-    n.children = n.children || [];
-    n.children.push(note);
+  // Find parent Contact for a node (traverses through Sub-Trees)
+  function findParentContact(nodeId) {
+    var current = findNode(nodeId);
+    while(current.parent) {
+      if(current.parent.template === 'Contact') {
+        return current.parent;
+      }
+      current = findNode(current.parent.id);
+    }
+    return null;
+  }
+
+  // Get all descendant nodes of a specific template type for a Contact (including Sub-Trees)
+  function getContactDescendants(contactNode, templateType) {
+    if(!contactNode || contactNode.template !== 'Contact') return [];
+    var results = [];
+    bfs(contactNode, function(n) {
+      if(n.template === templateType) {
+        results.push(n);
+      }
+    });
+    return results;
+  }
+
+  // Get all Tasks for a Contact (including those in Sub-Trees)
+  function getContactTasks(contactNode) {
+    return getContactDescendants(contactNode, 'Task');
+  }
+
+  // Get all Touches for a Contact (including those in Sub-Trees)
+  function getContactTouches(contactNode) {
+    return getContactDescendants(contactNode, 'Touch');
+  }
+
+  // Handle Touch completion - rolls up to parent Task and Contact
+  function onTouchCompleted(touchNode) {
+    if(!touchNode || touchNode.template !== 'Touch') return;
+    if(!touchNode.fields || touchNode.fields['Status'] !== 'Completed') return;
+
+    // 1. Find and mark parent Task as done
+    var touchInfo = findNode(touchNode.id);
+    var parentTask = touchInfo.parent;
+
+    if(!parentTask || parentTask.template !== 'Task') return;
+
+    parentTask.status = 'done';
+
+    // 2. Find grandparent Contact
+    var contact = findParentContact(parentTask.id);
+
+    if(contact) {
+      // 3. Roll up touch info to Contact's Notes
+      var timestamp = new Date().toLocaleString();
+      var touchType = touchNode.fields['Touch Type'] || 'Touch';
+      var touchNotes = (touchNode.notes || '').split('\n')[0] || '';
+      var touchInfo = timestamp + ': ' + touchType + (touchNotes ? ' - ' + touchNotes : '');
+
+      contact.notes = (contact.notes || '') + touchInfo + '\n\n';
+
+      // 4. Update Contact's Last Contact
+      contact.fields['Last Contact'] = utils.today();
+
+      // 5. Get Activity Offset (per-contact or global default)
+      var activityOffset = parseInt(contact.fields['Activity Offset']) ||
+                          parseInt(window.DOM.defaultOffsetInput.value) || 7;
+      var nextDue = utils.advanceDate(utils.today(), activityOffset);
+
+      // 6. Create new Task under Contact's Tasks Sub-Tree
+      var tasksTree = contact.children.find(function(c) {
+        return c.template === 'Sub-Tree' && /^Tasks$/i.test(c.title);
+      });
+
+      var newTask = newNode('Next contact', 'Task', tasksTree || contact);
+      newTask.due = nextDue;
+      newTask.status = 'todo';
+
+      if(tasksTree) {
+        tasksTree.children.push(newTask);
+      } else {
+        contact.children.push(newTask);
+      }
+
+      // 7. Update Contact's Next Contact
+      contact.fields['Next Contact'] = nextDue;
+    }
 
     // Record in analytics
     if(window.Analytics && window.Analytics.recordTouch) {
+      var channel = (touchNode.fields['Touch Type'] || '').toLowerCase();
+      if(channel === 'call') channel = 'calls';
+      else if(channel === 'email') channel = 'emails';
       window.Analytics.recordTouch(channel);
     }
-
-    return { success: true, noteId: note.id };
   }
 
-  // Find or create Task under Opportunity/COI node
-  function findOrCreateTask(opportunityNode) {
-    if(!opportunityNode) return null;
+  // Handle Task completion - update parent Contact
+  function onTaskCompleted(taskNode) {
+    if(!taskNode || taskNode.template !== 'Task') return;
+    if(taskNode.status !== 'done') return;
 
-    // Look for existing Task directly under this node
-    var existingTask = opportunityNode.children.find(function(c) {
-      return c.template === 'Task';
+    // Find parent Contact
+    var contact = findParentContact(taskNode.id);
+    if(!contact) return;
+
+    // Update Contact's Last Contact
+    contact.fields['Last Contact'] = utils.today();
+
+    // Get Activity Offset (per-contact or global default)
+    var activityOffset = parseInt(contact.fields['Activity Offset']) ||
+                        parseInt(window.DOM.defaultOffsetInput.value) || 7;
+    var nextDue = utils.advanceDate(utils.today(), activityOffset);
+
+    // Create new Task under Contact's Tasks Sub-Tree
+    var tasksTree = contact.children.find(function(c) {
+      return c.template === 'Sub-Tree' && /^Tasks$/i.test(c.title);
     });
 
-    if(existingTask) return existingTask;
+    var newTask = newNode('Next contact', 'Task', tasksTree || contact);
+    newTask.due = nextDue;
+    newTask.status = 'todo';
 
-    // No Task found, create one with due date = tomorrow
-    var tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    var tomorrowStr = tomorrow.toISOString().slice(0,10);
+    if(tasksTree) {
+      tasksTree.children.push(newTask);
+    } else {
+      contact.children.push(newTask);
+    }
 
-    var task = newNode('Follow-up', 'Task', opportunityNode);
-    task.due = tomorrowStr;
+    // Update Contact's Next Contact
+    contact.fields['Next Contact'] = nextDue;
+  }
+
+  // Roll up Note content to parent Contact's Notes field
+  function rollUpNote(noteNode) {
+    if(!noteNode || noteNode.template !== 'Note') return;
+
+    var contact = findParentContact(noteNode.id);
+    if(!contact) return;
+
+    var timestamp = new Date().toLocaleString();
+    var noteContent = noteNode.notes || noteNode.title || '';
+    var rollUpText = timestamp + ': ' + noteContent;
+
+    contact.notes = (contact.notes || '') + rollUpText + '\n\n';
+  }
+
+  // Get aggregated touch notes for a Task
+  function getTaskTouchNotes(taskNode) {
+    if(!taskNode || taskNode.template !== 'Task') return [];
+
+    return (taskNode.children || [])
+      .filter(function(c) { return c.template === 'Touch'; })
+      .map(function(t) {
+        var notes = (t.notes || '').split('\n')[0];
+        var touchType = (t.fields && t.fields['Touch Type']) || '';
+        return touchType ? touchType + ': ' + notes : notes;
+      })
+      .filter(Boolean)
+      .slice(0, 2); // Max 2 touch notes
+  }
+
+  // Legacy function - kept for compatibility but simplified
+  function onStatusChange(n) {
+    // No longer auto-creates recurring tasks - that behavior is removed
+  }
+
+  // Find or create Task under Contact node
+  function findOrCreateTask(contactNode) {
+    if(!contactNode) return null;
+
+    // Look for existing Task in Tasks Sub-Tree first
+    var tasksTree = contactNode.children.find(function(c) {
+      return c.template === 'Sub-Tree' && /^Tasks$/i.test(c.title);
+    });
+
+    if(tasksTree) {
+      var existingTask = tasksTree.children.find(function(c) {
+        return c.template === 'Task' && c.status !== 'done';
+      });
+      if(existingTask) return existingTask;
+    }
+
+    // Look for direct Task child
+    var directTask = contactNode.children.find(function(c) {
+      return c.template === 'Task' && c.status !== 'done';
+    });
+    if(directTask) return directTask;
+
+    // No Task found, create one with due date based on offset
+    var offset = parseInt(contactNode.fields['Activity Offset']) ||
+                 parseInt(window.DOM.defaultOffsetInput.value) || 7;
+    var dueDate = utils.advanceDate(utils.today(), offset);
+
+    var task = newNode('Next contact', 'Task', tasksTree || contactNode);
+    task.due = dueDate;
     task.status = 'todo';
 
-    opportunityNode.children.push(task);
+    if(tasksTree) {
+      tasksTree.children.push(task);
+    } else {
+      contactNode.children.push(task);
+    }
+
     return task;
   }
 
@@ -452,9 +577,16 @@ window.NodeOps = (function() {
     toggleHighlightCascade: toggleHighlightCascade,
     toggleFold: toggleFold,
     deleteNodeCascade: deleteNodeCascade,
-    tapRecurringFor: tapRecurringFor,
     onStatusChange: onStatusChange,
-    touchCurrent: touchCurrent,
-    findOrCreateTask: findOrCreateTask
+    findOrCreateTask: findOrCreateTask,
+    getAvailableChannels: getAvailableChannels,
+    findParentContact: findParentContact,
+    onTouchCompleted: onTouchCompleted,
+    onTaskCompleted: onTaskCompleted,
+    rollUpNote: rollUpNote,
+    getTaskTouchNotes: getTaskTouchNotes,
+    getContactDescendants: getContactDescendants,
+    getContactTasks: getContactTasks,
+    getContactTouches: getContactTouches
   };
 })();

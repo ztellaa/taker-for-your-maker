@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>RBC Wealth Map – v13.0.3</title>
+<title>RBC Wealth Map – v13.0.4</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -18,9 +18,12 @@
     <div class="left">
       <button class="btn primary" id="addRoot" type="button">New Map</button>
       <select id="templateSelect" title="Template">
-        <option value="">Template: none</option>
-        <option>Client</option><option>COI</option><option>Account</option><option>Task</option>
-        <option>Opportunity</option><option>Recurring Contact</option><option>Note</option><option>Sub-Tree</option>
+        <option value="Task" selected>Task</option>
+        <option value="Touch">Touch</option>
+        <option value="Note">Note</option>
+        <option value="Contact">Contact</option>
+        <option value="Account">Account</option>
+        <option value="Sub-Tree">Sub-Tree</option>
       </select>
       <button class="btn" id="addChild" type="button">Add Child</button>
       <label style="display:flex;gap:6px;align-items:center">Activity offset
@@ -68,8 +71,8 @@
     </div>
     <div class="stats-bar">
       <div class="stat">
-        <span>Total Clients:</span>
-        <span class="stat-value" id="statClients">0</span>
+        <span>Total Contacts:</span>
+        <span class="stat-value" id="statContacts">0</span>
       </div>
       <div class="stat">
         <span>Total AUM:</span>
@@ -80,8 +83,8 @@
         <span class="stat-value" id="statTasks">0</span>
       </div>
       <div class="stat">
-        <span>Opportunities:</span>
-        <span class="stat-value" id="statOpps">0</span>
+        <span>Touches:</span>
+        <span class="stat-value" id="statTouches">0</span>
       </div>
     </div>
   </section>
@@ -143,21 +146,21 @@
             <div class="stat-value" id="emails-week">0/100</div>
           </div>
         </div>
-      </div>
-      <div class="analytics-card" style="margin-top: 20px">
-        <h3>All-Time Averages (per day)</h3>
-        <div class="analytics-stats-row">
-          <div class="analytics-stat">
-            <div class="stat-label">Calls</div>
-            <div class="stat-value" id="calls-avg">0.0</div>
-          </div>
-          <div class="analytics-stat">
-            <div class="stat-label">LinkedIn</div>
-            <div class="stat-value" id="linkedin-avg">0.0</div>
-          </div>
-          <div class="analytics-stat">
-            <div class="stat-label">Emails</div>
-            <div class="stat-value" id="emails-avg">0.0</div>
+        <div class="analytics-card">
+          <h3>All-Time Averages (per day)</h3>
+          <div class="analytics-stats-row">
+            <div class="analytics-stat">
+              <div class="stat-label">Calls</div>
+              <div class="stat-value" id="calls-avg">0.0</div>
+            </div>
+            <div class="analytics-stat">
+              <div class="stat-label">LinkedIn</div>
+              <div class="stat-value" id="linkedin-avg">0.0</div>
+            </div>
+            <div class="analytics-stat">
+              <div class="stat-label">Emails</div>
+              <div class="stat-value" id="emails-avg">0.0</div>
+            </div>
           </div>
         </div>
       </div>
@@ -192,18 +195,33 @@
         <option value="biannually">Bi-Annually</option>
         <option value="annually">Annually</option>
       </select></div>
-      <div class="field" id="touchField" style="grid-column:1 / -1;display:none">
-        <label>Touch Details</label>
+      <div class="field" id="activityOffsetField" style="display:none">
+        <label for="f_activityOffset">Activity Offset (days)</label>
+        <input id="f_activityOffset" type="number" min="1" placeholder="Uses global default" />
+      </div>
+      <div class="field" id="touchTypeField" style="display:none">
+        <label for="f_touchType">Touch Type</label>
+        <select id="f_touchType">
+          <option value="">-- Select Type --</option>
+          <option value="Call">Call</option>
+          <option value="LinkedIn">LinkedIn</option>
+          <option value="Email">Email</option>
+        </select>
+      </div>
+      <div class="field" id="touchStatusField" style="display:none">
+        <label for="f_touchStatus">Touch Status</label>
+        <select id="f_touchStatus">
+          <option value="Not Completed">Not Completed</option>
+          <option value="Attempted">Attempted</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </div>
+      <div class="field" id="availableDetailsField" style="grid-column:1 / -1;display:none">
+        <label>Available Details</label>
         <div class="touch-checkboxes">
-          <label class="touch-check"><input type="checkbox" id="touch_calls" value="calls" /><span>📞 Call</span></label>
-          <label class="touch-check"><input type="checkbox" id="touch_linkedin" value="linkedin" /><span>💼 LinkedIn</span></label>
-          <label class="touch-check"><input type="checkbox" id="touch_emails" value="emails" /><span>📧 Email</span></label>
-        </div>
-        <div style="margin-top: 12px">
-          <label class="touch-check" style="border-color: var(--success)">
-            <input type="checkbox" id="touch_successful" />
-            <span>✓ Successful Contact</span>
-          </label>
+          <label class="touch-check"><input type="radio" name="taskTouchType" id="touch_calls" value="calls" /><span>📞 Call</span></label>
+          <label class="touch-check"><input type="radio" name="taskTouchType" id="touch_linkedin" value="linkedin" /><span>💼 LinkedIn</span></label>
+          <label class="touch-check"><input type="radio" name="taskTouchType" id="touch_emails" value="emails" /><span>📧 Email</span></label>
         </div>
       </div>
       <div class="field"><label>Node Color</label><div id="colorPalette" class="palette"></div></div>
@@ -243,9 +261,9 @@
     <div class="field">
       <label>Audience</label>
       <select id="audience">
-        <option value="clientsOpps">All Clients & Opportunities</option>
+        <option value="allContacts">All Contacts</option>
         <option value="byTags">By Tags…</option>
-        <option value="clientsCoi">All Clients & COIs</option>
+        <option value="byTier">By Tier…</option>
       </select>
     </div>
     <div class="field">
@@ -369,7 +387,7 @@
         </div>
         <div class="shortcut-item">
           <kbd>T</kbd>
-          <span>Touch current node</span>
+          <span>Add Touch to Task</span>
         </div>
       </div>
       <div class="shortcut-section">
@@ -397,7 +415,7 @@
   </div>
 </div>
 
-<div class="hint" id="hint">v13.0.3: Task-only touch workflow • Touch modal with analytics • Shake feedback</div>
+<div class="hint" id="hint">v13.0.4: Contact template consolidation • Touch workflow refactor • Note roll-up</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>

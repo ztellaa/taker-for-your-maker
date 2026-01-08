@@ -10,14 +10,12 @@ window.Editor = (function() {
   var validationErrors = {};
   var currentNodeTemplate = null;
   var originalLastContact = null;
+  var currentNodeId = null;
 
   // Show validation error for a field
   function showFieldError(kvLine, message) {
-    // Remove existing error if any
     var existing = kvLine.querySelector('.validation-error');
     if(existing) existing.remove();
-
-    // Remove has-error class
     kvLine.classList.remove('has-error');
 
     if(message) {
@@ -44,7 +42,6 @@ window.Editor = (function() {
       return;
     }
 
-    // Get all current fields for dateRange validation
     var allFields = {};
     utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
       var k = utils.$('input[data-k]', line).value.trim();
@@ -52,7 +49,6 @@ window.Editor = (function() {
       if(k) allFields[k] = v;
     });
 
-    // Add special fields
     allFields['Last Contact'] = dom.f_lastcontact.value;
     allFields['Next Contact'] = dom.f_nextcontact.value;
 
@@ -92,7 +88,7 @@ window.Editor = (function() {
   }
 
   function rebuildTemplateSelect(sel) {
-    sel.innerHTML = '<option value="Client">Client</option><option value="COI">COI</option><option value="Account">Account</option><option value="Task">Task</option><option value="Opportunity">Opportunity</option><option value="Recurring Contact">Recurring Contact</option><option value="Note">Note</option><option value="Sub-Tree">Sub-Tree</option>';
+    sel.innerHTML = '<option value="Task">Task</option><option value="Touch">Touch</option><option value="Note">Note</option><option value="Contact">Contact</option><option value="Account">Account</option><option value="Sub-Tree">Sub-Tree</option>';
   }
 
   function addKVRow(k, v) {
@@ -105,12 +101,10 @@ window.Editor = (function() {
 
     utils.$('button', line).onclick = function() {
       line.remove();
-      // Clear validation error for removed field
       var fieldName = utils.$('input[data-k]', line).value.trim();
       if(fieldName) delete validationErrors[fieldName];
     };
 
-    // Add blur validation to value input
     var valueInput = utils.$('input[data-v]', line);
     valueInput.addEventListener('blur', function() {
       if(currentNodeTemplate) {
@@ -121,6 +115,97 @@ window.Editor = (function() {
     dom.kvArea.appendChild(line);
   }
 
+  function setStatusOptions(tmpl, current) {
+    var taskOpts = ['todo','inprogress','blocked','done'];
+    var tierOpts = ['A-tier','B-tier','C-tier','Dormant'];
+    var touchOpts = ['Not Completed','Attempted','Completed'];
+    var opts = [];
+
+    if(tmpl === 'Task') {
+      opts = taskOpts;
+    } else if(tmpl === 'Contact') {
+      opts = tierOpts;
+    } else if(tmpl === 'Touch') {
+      // Touch uses fields['Status'], not node.status - disable the main status select
+      opts = [];
+    } else {
+      opts = [];
+    }
+
+    dom.f_status.innerHTML = opts.map(function(v){
+      return '<option value="'+v+'">'+utils.labelStatus(v)+'</option>';
+    }).join('');
+
+    if(opts.length) {
+      dom.f_status.disabled = false;
+      dom.f_status.value = opts.indexOf(current)!==-1 ? current : opts[0];
+    } else {
+      dom.f_status.innerHTML = '';
+      dom.f_status.disabled = true;
+    }
+  }
+
+  function applyVisibility(tmpl, node) {
+    var freqField = dom.f_freq.closest('.field');
+    var dueField = dom.f_due.closest('.field');
+    var lastContactField = dom.f_lastcontact.closest('.field');
+    var nextContactField = dom.f_nextcontact.closest('.field');
+    var statusField = dom.f_status.closest('.field');
+
+    var isContactTemplate = (tmpl === 'Contact');
+    var isTaskTemplate = (tmpl === 'Task');
+    var isTouchTemplate = (tmpl === 'Touch');
+
+    // Contact Frequency - only for Contact
+    freqField.style.display = isContactTemplate ? '' : 'none';
+
+    // Due date - for Task (or completed Touch parent)
+    dueField.style.display = isTaskTemplate ? '' : 'none';
+
+    // Status dropdown - hide for Touch (uses touchStatusField instead)
+    statusField.style.display = isTouchTemplate ? 'none' : '';
+
+    // Last/Next Contact - for Contact
+    lastContactField.style.display = isContactTemplate ? '' : 'none';
+    nextContactField.style.display = isContactTemplate ? '' : 'none';
+
+    // Activity Offset - for Contact
+    if(dom.activityOffsetField) {
+      dom.activityOffsetField.style.display = isContactTemplate ? '' : 'none';
+    }
+
+    // Touch Type and Status - for Touch template
+    if(dom.touchTypeField) {
+      dom.touchTypeField.style.display = isTouchTemplate ? '' : 'none';
+    }
+    if(dom.touchStatusField) {
+      dom.touchStatusField.style.display = isTouchTemplate ? '' : 'none';
+    }
+
+    // Available Details (radio buttons) - for Task template
+    if(dom.availableDetailsField) {
+      dom.availableDetailsField.style.display = isTaskTemplate ? '' : 'none';
+
+      // Set channel availability based on parent Contact
+      if(isTaskTemplate && node) {
+        var channels = nodeOps.getAvailableChannels(node);
+
+        if(dom.touch_calls) {
+          dom.touch_calls.disabled = !channels.call;
+          dom.touch_calls.parentElement.style.opacity = channels.call ? '1' : '0.5';
+        }
+        if(dom.touch_linkedin) {
+          dom.touch_linkedin.disabled = !channels.linkedin;
+          dom.touch_linkedin.parentElement.style.opacity = channels.linkedin ? '1' : '0.5';
+        }
+        if(dom.touch_emails) {
+          dom.touch_emails.disabled = !channels.email;
+          dom.touch_emails.parentElement.style.opacity = channels.email ? '1' : '0.5';
+        }
+      }
+    }
+  }
+
   function openEditor(id) {
     var node = nodeOps.findNode(id).node;
     if(!node) return;
@@ -128,6 +213,7 @@ window.Editor = (function() {
     // Reset validation state
     validationErrors = {};
     currentNodeTemplate = node.template;
+    currentNodeId = id;
 
     // Track original Last Contact for touch detection
     originalLastContact = utils.normalizeDate((node.fields && node.fields['Last Contact']) || '');
@@ -143,10 +229,24 @@ window.Editor = (function() {
     dom.f_lastcontact.value = originalLastContact;
     dom.f_nextcontact.value = utils.normalizeDate((node.fields && node.fields['Next Contact']) || '');
 
+    // Set Activity Offset for Contact
+    if(dom.f_activityOffset) {
+      dom.f_activityOffset.value = (node.fields && node.fields['Activity Offset']) || '';
+    }
+
+    // Set Touch fields for Touch template
+    if(dom.f_touchType) {
+      dom.f_touchType.value = (node.fields && node.fields['Touch Type']) || '';
+    }
+    if(dom.f_touchStatus) {
+      dom.f_touchStatus.value = (node.fields && node.fields['Status']) || 'Not Completed';
+    }
+
     buildPalette(node.color);
     dom.kvArea.innerHTML = '';
     var entries = Object.entries(node.fields||{}).filter(function(entry){
-      return ['Last Contact','Next Contact'].indexOf(entry[0])===-1;
+      // Filter out fields we handle separately
+      return ['Last Contact','Next Contact','Activity Offset','Touch Type','Status'].indexOf(entry[0])===-1;
     });
     if(entries.length===0) {
       addKVRow('','');
@@ -156,93 +256,47 @@ window.Editor = (function() {
       });
     }
 
-    function setStatusOptions(tmpl, current) {
-      var taskOpts = ['todo','inprogress','blocked','done'];
-      var tierOpts = ['A-tier','B-tier','C-tier','Dormant'];
-      var opts = [];
-
-      if(tmpl==='Task' || tmpl==='Recurring Contact') {
-        opts = taskOpts;
-      } else if(['Client','COI','Opportunity'].indexOf(tmpl)!==-1) {
-        opts = tierOpts;
-      } else {
-        opts = [];
-      }
-
-      dom.f_status.innerHTML = opts.map(function(v){
-        return '<option value="'+v+'">'+utils.labelStatus(v)+'</option>';
-      }).join('');
-
-      if(opts.length) {
-        dom.f_status.disabled = false;
-        dom.f_status.value = opts.indexOf(current)!==-1 ? current : opts[0];
-      } else {
-        dom.f_status.innerHTML = '';
-        dom.f_status.disabled = true;
-      }
-    }
-
-    function applyVisibility(tmpl) {
-      var freqField = dom.f_freq.closest('.field');
-      var dueField = dom.f_due.closest('.field');
-      var lastContactField = dom.f_lastcontact.closest('.field');
-      var nextContactField = dom.f_nextcontact.closest('.field');
-      var touchField = utils.$('#touchField');
-
-      var isContactTemplate = (tmpl==='Client'||tmpl==='COI'||tmpl==='Opportunity');
-      var isTaskTemplate = (tmpl==='Task');
-
-      freqField.style.display = (tmpl==='Client'||tmpl==='COI'||tmpl==='Recurring Contact') ? '' : 'none';
-      dueField.style.display = (tmpl==='Task'||tmpl==='Recurring Contact') ? '' : 'none';
-      lastContactField.style.display = isContactTemplate ? '' : 'none';
-      nextContactField.style.display = isContactTemplate ? '' : 'none';
-      touchField.style.display = isTaskTemplate ? '' : 'none';
-    }
-
     setStatusOptions(node.template, node.status||'');
-    applyVisibility(node.template);
+    applyVisibility(node.template, node);
 
-    // Make touch checkboxes mutually exclusive
-    var touchCheckboxes = [
-      utils.$('#touch_calls'),
-      utils.$('#touch_linkedin'),
-      utils.$('#touch_emails')
-    ];
-
-    touchCheckboxes.forEach(function(checkbox) {
-      if (checkbox) {
-        checkbox.checked = false; // Reset on open
-        checkbox.addEventListener('change', function() {
-          if (this.checked) {
-            touchCheckboxes.forEach(function(other) {
-              if (other !== checkbox) other.checked = false;
-            });
-          }
-        });
-      }
-    });
+    // Reset touch radio buttons
+    if(dom.touch_calls) dom.touch_calls.checked = false;
+    if(dom.touch_linkedin) dom.touch_linkedin.checked = false;
+    if(dom.touch_emails) dom.touch_emails.checked = false;
 
     // Auto-calculate Next Contact when Last Contact changes
-    dom.f_lastcontact.addEventListener('change', function() {
+    dom.f_lastcontact.onchange = function() {
       if (this.value) {
         var lastContact = new Date(this.value);
         var offsetDays = parseInt(dom.defaultOffsetInput.value) || 7;
         var nextContact = new Date(lastContact);
         nextContact.setDate(nextContact.getDate() + offsetDays);
 
-        // Format as YYYY-MM-DD
         var year = nextContact.getFullYear();
         var month = String(nextContact.getMonth() + 1).padStart(2, '0');
         var day = String(nextContact.getDate()).padStart(2, '0');
         dom.f_nextcontact.value = year + '-' + month + '-' + day;
       }
-    });
+    };
+
+    // Auto-set Activity Offset when Contact Frequency changes
+    dom.f_freq.onchange = function() {
+      var freq = this.value;
+      var offsetDays = 0;
+      if(freq === 'monthly') offsetDays = 30;
+      else if(freq === 'quarterly') offsetDays = 90;
+      else if(freq === 'biannually') offsetDays = 180;
+      else if(freq === 'annually') offsetDays = 365;
+
+      if(offsetDays > 0 && dom.f_activityOffset) {
+        dom.f_activityOffset.value = offsetDays;
+      }
+    };
 
     dom.f_template.onchange = function() {
       currentNodeTemplate = dom.f_template.value;
       setStatusOptions(dom.f_template.value, dom.f_status.value);
-      applyVisibility(dom.f_template.value);
-      // Clear validation errors when template changes
+      applyVisibility(dom.f_template.value, node);
       validationErrors = {};
       utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
         showFieldError(line, null);
@@ -257,23 +311,19 @@ window.Editor = (function() {
     };
 
     dom.saveEditBtn.onclick = function() {
-      // Capture state before editing
       window.UndoManager.capture('edit', {nodeId: node.id, title: node.title});
 
-      // Build temporary node data for validation
       var tempNode = {
         template: dom.f_template.value || node.template,
         fields: {}
       };
 
-      // Collect all KV fields
       utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
         var k = utils.$('input[data-k]', line).value.trim();
         var v = utils.$('input[data-v]', line).value.trim();
         if(k) tempNode.fields[k] = v;
       });
 
-      // Add contact dates if visible
       var lastContactField = dom.f_lastcontact.closest('.field');
       var nextContactField = dom.f_nextcontact.closest('.field');
       if(lastContactField.style.display !== 'none') {
@@ -283,23 +333,21 @@ window.Editor = (function() {
         tempNode.fields['Next Contact'] = dom.f_nextcontact.value || '';
       }
 
-      // Validate the node
       var validationResult = window.Validation.validateNode(tempNode);
       if(!validationResult.valid) {
-        // Show errors inline
         utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
           var fieldName = utils.$('input[data-k]', line).value.trim();
           if(fieldName && validationResult.errors[fieldName]) {
             showFieldError(line, validationResult.errors[fieldName]);
           }
         });
-
         alert('Please fix validation errors before saving.');
         return;
       }
 
       var prevTemplate = node.template;
       var prevStatus = node.status;
+      var prevTouchStatus = (node.fields && node.fields['Status']) || '';
 
       node.title = dom.f_title.value.trim() || 'Untitled';
       node.due = dom.f_due.value;
@@ -347,126 +395,46 @@ window.Editor = (function() {
         node.fields['Next Contact'] = dom.f_nextcontact.value || '';
       }
 
+      // Save Activity Offset for Contact
+      if(dom.activityOffsetField && dom.activityOffsetField.style.display !== 'none') {
+        node.fields['Activity Offset'] = dom.f_activityOffset.value || '';
+      }
+
+      // Save Touch Type and Status for Touch template
+      if(dom.touchTypeField && dom.touchTypeField.style.display !== 'none') {
+        node.fields['Touch Type'] = dom.f_touchType.value || '';
+      }
+      if(dom.touchStatusField && dom.touchStatusField.style.display !== 'none') {
+        node.fields['Status'] = dom.f_touchStatus.value || 'Not Completed';
+      }
+
       nodeOps.ensureTags(node);
       node.color = state.selectedPaletteColor || node.color;
 
       dom.editorBackdrop.style.display = 'none';
       dom.editorBackdrop.setAttribute('aria-hidden','true');
 
-      if(prevStatus !== 'done' && node.status === 'done') {
-        nodeOps.onStatusChange(node);
+      // Handle Touch completion
+      if(node.template === 'Touch') {
+        var newTouchStatus = node.fields['Status'] || '';
+        if(newTouchStatus === 'Completed' && prevTouchStatus !== 'Completed') {
+          nodeOps.onTouchCompleted(node);
+        }
+      }
+
+      // Handle Task completion - update parent Contact
+      if(node.template === 'Task' && node.status === 'done' && prevStatus !== 'done') {
+        nodeOps.onTaskCompleted(node);
+      }
+
+      // Handle Note roll-up
+      if(node.template === 'Note') {
+        nodeOps.rollUpNote(node);
       }
 
       window.Storage.markDirty();
       window.Render.renderMindMap();
       window.Render.buildList();
-
-      // NEW TOUCH WORKFLOW (v13.0.3)
-
-      // 1. For Opportunity/COI: If Last Contact changed, update associated Task
-      var newLastContact = dom.f_lastcontact.value || '';
-      var newNextContact = dom.f_nextcontact.value || '';
-      var isOppOrCOI = (node.template === 'Opportunity' || node.template === 'COI');
-      var lastContactChanged = newLastContact && newLastContact !== originalLastContact;
-
-      if (isOppOrCOI && lastContactChanged) {
-        // Find or create Task under this Opportunity/COI
-        var task = nodeOps.findOrCreateTask(node);
-        if (task) {
-          if (!task.fields) task.fields = {};
-          task.fields['Last Contact'] = newLastContact;
-          if (newNextContact) {
-            task.fields['Next Contact'] = newNextContact;
-          }
-        }
-      }
-
-      // 2. For Task: If touch checkbox selected, create Touch node
-      var isTask = (node.template === 'Task');
-      if (isTask) {
-        var touchCalls = utils.$('#touch_calls');
-        var touchLinkedIn = utils.$('#touch_linkedin');
-        var touchEmails = utils.$('#touch_emails');
-        var touchSuccessful = utils.$('#touch_successful');
-
-        var selectedChannel = null;
-        if (touchCalls && touchCalls.checked) selectedChannel = 'calls';
-        else if (touchLinkedIn && touchLinkedIn.checked) selectedChannel = 'linkedin';
-        else if (touchEmails && touchEmails.checked) selectedChannel = 'emails';
-
-        if (selectedChannel) {
-          // Create Touch node as child of this Task
-          var touchNode = nodeOps.newNode('Touch ' + utils.today(), 'Note', node);
-          touchNode.color = '#4CAF50'; // Green for touch
-          if (!touchNode.fields) touchNode.fields = {};
-          touchNode.fields['Touch Type'] = selectedChannel;
-          touchNode.fields['Date'] = utils.today();
-          touchNode.fields['Successful'] = (touchSuccessful && touchSuccessful.checked) ? 'Yes' : 'No';
-          node.children.push(touchNode);
-
-          // Record analytics
-          var result = window.Analytics.recordTouch(selectedChannel);
-          if (result.success) {
-            window.TouchTracker.showToast('Touch recorded: ' + selectedChannel + ' (' + result.count + '/20 today)');
-          }
-
-          // Handle successful vs unsuccessful touch
-          var wasSuccessful = (touchSuccessful && touchSuccessful.checked);
-          if (wasSuccessful) {
-            // Mark Task as completed
-            node.status = 'done';
-
-            // Propagate to parent Opportunity/COI and create new Task
-            var parentInfo = nodeOps.findNode(node.id);
-            if (parentInfo && parentInfo.parent) {
-              var parent = parentInfo.parent;
-              if (parent.template === 'Opportunity' || parent.template === 'COI') {
-                // Update parent's contact dates
-                if (!parent.fields) parent.fields = {};
-                parent.fields['Last Contact'] = utils.today();
-
-                // Calculate Next Contact using activity offset
-                var offsetDays = parseInt(dom.defaultOffsetInput.value) || 7;
-                var nextDate = new Date();
-                nextDate.setDate(nextDate.getDate() + offsetDays);
-                var nextContactStr = nextDate.toISOString().slice(0,10);
-                parent.fields['Next Contact'] = nextContactStr;
-
-                // Create new Task under parent
-                var newTask = nodeOps.newNode('Follow-up', 'Task', parent);
-                newTask.due = nextContactStr;
-                newTask.status = 'todo';
-                parent.children.push(newTask);
-              }
-            }
-          } else {
-            // Unsuccessful touch: set Task due to tomorrow
-            var tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            node.due = tomorrow.toISOString().slice(0,10);
-          }
-
-          // Select the Touch node
-          state.selectedId = touchNode.id;
-        }
-      }
-
-      // 3. Propagate Task changes to parent Opportunity/COI
-      if (isTask) {
-        var parentInfo = nodeOps.findNode(node.id);
-        if (parentInfo && parentInfo.parent) {
-          var parent = parentInfo.parent;
-          if (parent.template === 'Opportunity' || parent.template === 'COI') {
-            if (!parent.fields) parent.fields = {};
-            if (node.fields && node.fields['Last Contact']) {
-              parent.fields['Last Contact'] = node.fields['Last Contact'];
-            }
-            if (node.fields && node.fields['Next Contact']) {
-              parent.fields['Next Contact'] = node.fields['Next Contact'];
-            }
-          }
-        }
-      }
     };
 
     dom.cancelEditBtn.onclick = function() {
@@ -475,14 +443,12 @@ window.Editor = (function() {
     };
   }
 
-  // Initialize button handlers
   function init() {
     dom.addKVBtn.onclick = function() {
       return addKVRow();
     };
   }
 
-  // Public API
   return {
     openEditor: openEditor,
     buildPalette: buildPalette,

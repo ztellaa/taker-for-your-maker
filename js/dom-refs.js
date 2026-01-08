@@ -62,6 +62,20 @@ window.DOM = (function() {
     colorPalette: $('#colorPalette'),
     importAccountsBtn: $('#importAccounts'),
 
+    // Touch template fields
+    f_touchType: $('#f_touchType'),
+    f_touchStatus: $('#f_touchStatus'),
+    f_activityOffset: $('#f_activityOffset'),
+    touchTypeField: $('#touchTypeField'),
+    touchStatusField: $('#touchStatusField'),
+    activityOffsetField: $('#activityOffsetField'),
+    availableDetailsField: $('#availableDetailsField'),
+
+    // Task touch radio buttons
+    touch_calls: $('#touch_calls'),
+    touch_linkedin: $('#touch_linkedin'),
+    touch_emails: $('#touch_emails'),
+
     // Backups modal
     backupsBackdrop: $('#backupsBackdrop'),
     backupsList: $('#backupsList'),
@@ -93,9 +107,9 @@ window.DOM = (function() {
     confirmTouchBtn: $('#confirmTouch'),
 
     // Stats
-    statClients: $('#statClients'),
+    statContacts: $('#statContacts'),
     statAUM: $('#statAUM'),
     statTasks: $('#statTasks'),
-    statOpps: $('#statOpps')
+    statTouches: $('#statTouches')
   };
 })();

@@ -187,6 +187,68 @@ window.Events = (function() {
       node.anchored = false;
     });
 
+    // Node dimensions for collision detection
+    var nodeW = 260;
+    var nodeH = 120;
+    var centerThreshold = 50; // Distance from center to allow reparenting
+
+    // Check if two nodes overlap
+    function nodesOverlap(pos1, pos2) {
+      return !(pos1.x + nodeW < pos2.x ||
+               pos2.x + nodeW < pos1.x ||
+               pos1.y + nodeH < pos2.y ||
+               pos2.y + nodeH < pos1.y);
+    }
+
+    // Check if position is near the center of a node
+    function isNearCenter(draggedPos, targetPos) {
+      var draggedCenterX = draggedPos.x + nodeW / 2;
+      var draggedCenterY = draggedPos.y + nodeH / 2;
+      var targetCenterX = targetPos.x + nodeW / 2;
+      var targetCenterY = targetPos.y + nodeH / 2;
+      var dist = Math.sqrt(
+        Math.pow(draggedCenterX - targetCenterX, 2) +
+        Math.pow(draggedCenterY - targetCenterY, 2)
+      );
+      return dist < centerThreshold;
+    }
+
+    // Find all other node positions
+    function getOtherNodePositions(excludeId) {
+      var positions = [];
+      nodeOps.bfs(state.map, function(n) {
+        if(n.id !== excludeId && n.pos) {
+          positions.push({id: n.id, pos: n.pos});
+        }
+      });
+      return positions;
+    }
+
+    // Adjust position to avoid overlap (unless near center)
+    function adjustForOverlap(newPos, dragId) {
+      var others = getOtherNodePositions(dragId);
+      var adjusted = {x: newPos.x, y: newPos.y};
+      var padding = 10;
+
+      for(var i = 0; i < others.length; i++) {
+        var other = others[i];
+        if(nodesOverlap(adjusted, other.pos)) {
+          // Allow overlap if near center (for reparenting)
+          if(isNearCenter(adjusted, other.pos)) {
+            return adjusted;
+          }
+          // Push away from the overlapping node
+          var dx = (adjusted.x + nodeW/2) - (other.pos.x + nodeW/2);
+          var dy = (adjusted.y + nodeH/2) - (other.pos.y + nodeH/2);
+          var dist = Math.sqrt(dx*dx + dy*dy) || 1;
+          var pushDist = Math.sqrt(nodeW*nodeW + nodeH*nodeH) / 2 + padding;
+          adjusted.x = other.pos.x + nodeW/2 + (dx/dist) * pushDist - nodeW/2;
+          adjusted.y = other.pos.y + nodeH/2 + (dy/dist) * pushDist - nodeH/2;
+        }
+      }
+      return adjusted;
+    }
+
     dom.nodeLayer.addEventListener('pointermove', function(e) {
       if(!state.drag) return;
       var rect = dom.stage.getBoundingClientRect();
@@ -194,8 +256,17 @@ window.Events = (function() {
       var localY = (e.clientY-rect.top)/state.zoom;
       var node = nodeOps.findNode(state.drag.id).node;
       var prevX = node.pos.x, prevY = node.pos.y;
-      node.pos.x = localX - state.drag.offX;
-      node.pos.y = localY - state.drag.offY;
+
+      var intendedPos = {
+        x: localX - state.drag.offX,
+        y: localY - state.drag.offY
+      };
+
+      // Adjust position to prevent overlap (unless near center for reparenting)
+      var adjustedPos = adjustForOverlap(intendedPos, state.drag.id);
+      node.pos.x = adjustedPos.x;
+      node.pos.y = adjustedPos.y;
+
       var dx = node.pos.x - prevX, dy = node.pos.y - prevY;
 
       (function moveAnchored(n) {
@@ -234,15 +305,22 @@ window.Events = (function() {
         dragDistance = Math.sqrt(dx*dx + dy*dy);
       }
 
-      // Only reparent if dragged more than 25 pixels
+      // Only reparent if dragged more than 25 pixels AND dropped near center of another node
       if(dragDistance > 25) {
-        var path = document.elementsFromPoint(e.clientX, e.clientY);
-        var targetEl = path.find(function(el){
-          return el.classList && el.classList.contains('node') && el.dataset.id!==state.drag.id;
-        });
+        var draggedNode = nodeOps.findNode(state.drag.id).node;
+        var others = getOtherNodePositions(state.drag.id);
+        var targetNode = null;
 
-        if(targetEl) {
-          var targetId = targetEl.dataset.id;
+        // Find a node whose center we're near
+        for(var i = 0; i < others.length; i++) {
+          if(isNearCenter(draggedNode.pos, others[i].pos)) {
+            targetNode = others[i];
+            break;
+          }
+        }
+
+        if(targetNode) {
+          var targetId = targetNode.id;
           if(!nodeOps.isDescendant(state.drag.id, targetId)) {
             var found = nodeOps.findNode(state.drag.id);
             var oldParent = found.parent;
@@ -293,7 +371,7 @@ window.Events = (function() {
     // Main action buttons
     dom.addRootBtn.onclick = function() {
       if(state.map && !confirm('Start a new map? Current map will be replaced.')) return;
-      state.map = nodeOps.newNode('Root','Client',null);
+      state.map = nodeOps.newNode('Root','Contact',null);
       state.map.pos = {x:0,y:0};
       state.selectedId = state.map.id;
       window.Storage.markDirty();
@@ -400,30 +478,6 @@ window.Events = (function() {
   }
 
   function initNodeClickHandlers() {
-    // Touch shortcut handler
-    dom.nodeLayer.addEventListener('click', function(e) {
-      var btn = e.target.closest('[data-act="tap"]');
-      if(!btn) return;
-      var nodeEl = e.target.closest('.node');
-      if(nodeEl && nodeEl.dataset && nodeEl.dataset.id) {
-        window.Render.selectNode(nodeEl.dataset.id);
-        var f = nodeOps.findNode(nodeEl.dataset.id);
-        if(f && f.node && f.node.template === 'Task') {
-          window.Modals.openTouchModal();
-        } else {
-          // Shake the node
-          nodeEl.classList.remove('shake');
-          void nodeEl.offsetWidth;
-          nodeEl.classList.add('shake');
-          setTimeout(function() {
-            nodeEl.classList.remove('shake');
-          }, 400);
-        }
-      }
-      e.preventDefault();
-      e.stopPropagation();
-    }, true);
-
     // General node click handler
     dom.nodeLayer.addEventListener('click', function(e) {
       if(e.target && e.target.closest('a[href]')) {
@@ -480,13 +534,6 @@ window.Events = (function() {
         window.Render.renderMindMap();
       }
 
-      if(act==='tap') {
-        nodeOps.tapRecurringFor(id);
-        window.Storage.markDirty();
-        window.Render.renderMindMap();
-        window.Render.buildList();
-      }
-
       if(act==='child') {
         var node = nodeOps.findNode(id).node;
         if(!node) return;
@@ -530,9 +577,16 @@ window.Events = (function() {
         var f = nodeOps.findNode(state.selectedId);
         if(!f || !f.node) return;
 
-        // Only allow touch on Task nodes
+        // Only allow adding Touch to Task nodes
         if(f.node.template === 'Task') {
-          window.Modals.openTouchModal();
+          // Create a new Touch child node
+          var touchNode = nodeOps.newNode('Touch', 'Touch', f.node);
+          f.node.children.push(touchNode);
+          window.Storage.markDirty();
+          window.Render.renderMindMap();
+          window.Render.selectNode(touchNode.id);
+          // Open editor for the new Touch node
+          window.Editor.openEditor(touchNode.id);
         } else {
           // Shake the node to indicate invalid action
           var nodeEl = document.querySelector('.node[data-id="' + state.selectedId + '"]');
@@ -604,6 +658,23 @@ window.Events = (function() {
           window.Render.renderMindMap();
           window.Render.buildList();
           e.preventDefault();
+        }
+      }
+
+      // P key: Create new Contact node as child of selected node
+      if(e.key==='p' || e.key==='P') {
+        if(state.selectedId) {
+          var parent = nodeOps.findNode(state.selectedId).node;
+          if(parent) {
+            window.UndoManager.capture('add', {parentId: state.selectedId, template: 'Contact'});
+            var contactNode = nodeOps.newNode('New Contact', 'Contact', parent);
+            parent.children.push(contactNode);
+            window.Storage.markDirty();
+            window.Render.renderMindMap();
+            window.Render.selectNode(contactNode.id);
+            window.Editor.openEditor(contactNode.id);
+            e.preventDefault();
+          }
         }
       }
 
