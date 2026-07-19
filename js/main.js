@@ -8,6 +8,7 @@ window.Main = (function() {
   var editor = window.Editor;
   var modals = window.Modals;
   var events = window.Events;
+  var dom = window.DOM;
 
   function createDemoData() {
     state.map = nodeOps.newNode('RBC Wealth Portfolio','Client',null);
@@ -42,7 +43,6 @@ window.Main = (function() {
     o1.fields['Last Contact'] = '2025-01-05';
     o1.fields['Next Contact'] = '2025-01-25';
 
-    nodeOps.ensureScaffolding();
     state.map.children.push(c1, coi);
     c1.children.push(a1, o1);
   }
@@ -83,6 +83,31 @@ window.Main = (function() {
     });
   }
 
+  function initFilePersistence() {
+    if(!window.FilePersistence) return;
+    window.FilePersistence.initButton();
+    window.FilePersistence.init();
+  }
+
+  var WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function checkBackupReminder() {
+    if(!dom.backupReminderBackdrop) return;
+    var last = parseInt(localStorage.getItem('wm.lastBackupReminder') || '0', 10);
+    if(Date.now() - last < WEEK_MS) return;
+
+    dom.backupReminderBackdrop.style.display = 'flex';
+    dom.backupReminderBackdrop.setAttribute('aria-hidden', 'false');
+
+    if(dom.dismissBackupReminderBtn) {
+      dom.dismissBackupReminderBtn.onclick = function() {
+        localStorage.setItem('wm.lastBackupReminder', String(Date.now()));
+        dom.backupReminderBackdrop.style.display = 'none';
+        dom.backupReminderBackdrop.setAttribute('aria-hidden', 'true');
+      };
+    }
+  }
+
   function init() {
     // Restore saved data or create demo data
     restore();
@@ -101,9 +126,11 @@ window.Main = (function() {
     modals.init();
     initAutosave();
     initResize();
+    initFilePersistence();
+    checkBackupReminder();
 
-    // Apply initial transform
-    events.stageTransform();
+    // Center viewport on root node
+    events.centerOnNode(state.map);
   }
 
   // Public API

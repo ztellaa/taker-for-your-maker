@@ -15,7 +15,7 @@ window.Render = (function() {
     var contacts = 0, aum = 0, tasks = 0, touches = 0;
     nodeOps.bfs(state.map, function(n) {
       if(n.template === 'Contact') contacts++;
-      if(n.template === 'Touch') touches++;
+      if(n.template === 'Task' && n.fields && n.fields['Channel']) touches++;
       if(n.template === 'Task' && n.status !== 'done') tasks++;
       if(n.fields && n.fields['AUM']) {
         var val = parseFloat(String(n.fields['AUM']).replace(/[^0-9.-]/g,'')) || 0;
@@ -92,22 +92,25 @@ window.Render = (function() {
       var card = document.createElement('div');
       var highlightCls = n.highlight ? ' highlight' : (n.proxyHighlight ? ' proxy-highlight' : '');
       var subtreeCls = n.template === 'Sub-Tree' ? ' subtree' : '';
-      var touchCls = n.template === 'Touch' ? ' touch-card' : '';
       var taskDoneCls = (n.template === 'Task' && n.status === 'done') ? ' task-done' : '';
-      // Touch status classes
-      var touchStatusCls = '';
-      if(n.template === 'Touch') {
-        var touchStatus = (n.fields && n.fields['Status']) || 'Not Completed';
-        if(touchStatus === 'Completed') touchStatusCls = ' touch-completed';
-        else if(touchStatus === 'Attempted') touchStatusCls = ' touch-attempted';
-        else touchStatusCls = ' touch-not-completed';
-      }
-      card.className = 'node' + highlightCls + subtreeCls + touchCls + taskDoneCls + touchStatusCls;
+      card.className = 'node' + highlightCls + subtreeCls + taskDoneCls;
       card.style.left = n.pos.x + 'px';
       card.style.top = n.pos.y + 'px';
       card.dataset.id = n.id;
       card.dataset.template = n.template;
-      card.style.borderColor = utils.shade(n.color, -0.2);
+
+      var rotFlag = false;
+      if(n.template === 'Contact') {
+        var rot = nodeOps.getContactRotColor(n);
+        if(!n.colorIsCustom) {
+          card.style.borderColor = utils.shade(rot.color, -0.2);
+        } else {
+          card.style.borderColor = utils.shade(n.color, -0.2);
+          rotFlag = rot.days >= 30;
+        }
+      } else {
+        card.style.borderColor = utils.shade(n.color, -0.2);
+      }
       if(n.bgColor) {
         card.style.backgroundColor = n.bgColor;
       }
@@ -135,7 +138,8 @@ window.Render = (function() {
       var todoLine = nextTask ? '<div class="meta"><span>Next task: ' + utils.formatDateDisplay(nextTask) + '</span></div>' : '';
 
       var doneChip = (n.status === 'done') ? ' <span class="badge" title="Done">✓</span>' : '';
-      var titleHTML = '<div class="title" style="font-size:' + (n.template === 'Sub-Tree' ? Math.max(16, 28 - depth * 2) + 'px' : '15px') + '">' + bodyHTML + ' ' + typeChip + ' ' + collapsedChip + sfChip + webChip + liChip + doneChip + '</div>';
+      var rotFlagChip = rotFlag ? ' <span class="badge danger" title="Overdue for contact">🚩</span>' : '';
+      var titleHTML = '<div class="title" style="font-size:' + (n.template === 'Sub-Tree' ? Math.max(16, 28 - depth * 2) + 'px' : '15px') + '">' + bodyHTML + ' ' + typeChip + ' ' + collapsedChip + sfChip + webChip + liChip + doneChip + rotFlagChip + '</div>';
 
       // Build meta section
       var metaFragments = [];
@@ -166,8 +170,8 @@ window.Render = (function() {
         }
       }
 
-      // Add due dates for tasks (not Contact or Touch)
-      if(n.template !== 'Contact' && n.template !== 'Touch') {
+      // Add due dates for tasks (not Contact)
+      if(n.template !== 'Contact') {
         var childDue = (n.children || []).map(function(c) { return c.due; }).filter(Boolean).sort()[0];
         var showDue = !!n.due || !!childDue;
         if(showDue) {
@@ -193,14 +197,6 @@ window.Render = (function() {
         }
       }
 
-      // Add aggregated touch notes for Task cards
-      if(n.template === 'Task') {
-        var touchNotes = nodeOps.getTaskTouchNotes(n);
-        if(touchNotes.length) {
-          metaFragments.push('<span style="color:#9aa3b2">📱 ' + touchNotes.map(utils.esc).join(' | ') + '</span>');
-        }
-      }
-
       var meta = document.createElement('div');
       meta.className = 'meta';
       meta.innerHTML = metaFragments.join(' ');
@@ -210,9 +206,9 @@ window.Render = (function() {
       var kv = null;
       var tagsSection = null;
       var notesSection = null;
-      var excludeFields = ['Last Contact', 'Next Contact', 'Touch Type', 'Status', 'Tags'];
+      var excludeFields = ['Last Contact', 'Next Contact', 'Channel', 'Tags'];
 
-      if(n.template !== 'Sub-Tree' && n.template !== 'Touch' && n.template !== 'Contact') {
+      if(n.template !== 'Sub-Tree' && n.template !== 'Contact') {
         var fieldEntries = Object.entries(n.fields || {}).filter(function(entry) {
           return excludeFields.indexOf(entry[0]) === -1;
         });
@@ -237,21 +233,13 @@ window.Render = (function() {
       var actions = document.createElement('div');
       actions.className = 'actions';
 
-      if(n.template === 'Touch') {
-        // Touch cards only have Flag + Edit buttons
-        actions.innerHTML =
-          '<button class="btn" data-act="hl" type="button">' + (n.highlight ? 'Unflag' : 'Flag') + '</button>' +
-          '<button class="btn" data-act="edit" type="button">Edit</button>';
-      } else {
-        // Standard buttons for other templates
-        actions.innerHTML =
-          '<button class="btn" data-act="child" type="button">Child</button>' +
-          '<button class="btn" data-act="add" type="button">+Child</button>' +
-          '<button class="btn" data-act="fold" type="button">' + (n.collapsed ? 'Unfold' : 'Fold') + '</button>' +
-          '<button class="btn" data-act="edit" type="button">Edit</button>' +
-          '<button class="btn" data-act="hl" type="button">' + (n.highlight ? 'Unflag' : 'Flag') + '</button>' +
-          '<button class="btn danger" data-act="del" type="button">Delete</button>';
-      }
+      actions.innerHTML =
+        '<button class="btn" data-act="child" type="button">Child</button>' +
+        '<button class="btn" data-act="add" type="button">+Child</button>' +
+        '<button class="btn" data-act="fold" type="button">' + (n.collapsed ? 'Unfold' : 'Fold') + '</button>' +
+        '<button class="btn" data-act="edit" type="button">Edit</button>' +
+        '<button class="btn" data-act="hl" type="button">' + (n.highlight ? 'Unflag' : 'Flag') + '</button>' +
+        '<button class="btn danger" data-act="del" type="button">Delete</button>';
 
       card.innerHTML = titleHTML + todoLine;
       card.appendChild(meta);

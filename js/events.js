@@ -71,6 +71,25 @@ window.Events = (function() {
     utils.$('#zoomReset').textContent = Math.round(state.zoom*100)+'%';
   }
 
+  // Center the viewport on a given node (used to center on root at launch)
+  function centerOnNode(node) {
+    if(!node || !node.pos) return;
+    var containerRect = dom.stageWrap.getBoundingClientRect();
+    state.tx = containerRect.width/2 - node.pos.x*state.zoom;
+    state.ty = containerRect.height/2 - node.pos.y*state.zoom;
+    stageTransform();
+
+    // node.pos is the card's top-left corner - nudge so its rendered visual
+    // center (not its origin) lands at the viewport center.
+    var card = document.querySelector('.node[data-id="'+node.id+'"]');
+    if(card) {
+      var cardRect = card.getBoundingClientRect();
+      state.tx += (containerRect.left + containerRect.width/2) - (cardRect.left + cardRect.width/2);
+      state.ty += (containerRect.top + containerRect.height/2) - (cardRect.top + cardRect.height/2);
+      stageTransform();
+    }
+  }
+
   /**
    * Zoom toward a specific screen point (or tracked mouse position, or viewport center)
    *
@@ -854,19 +873,13 @@ window.Events = (function() {
         var f = nodeOps.findNode(state.selectedId);
         if(!f || !f.node) return;
 
-        // T on Task creates Touch, T on Sub-tree creates Task
-        if(f.node.template === 'Task') {
-          // Create a new Touch child node
-          var touchNode = nodeOps.newNode('Touch', 'Touch', f.node);
-          f.node.children.push(touchNode);
-          window.Storage.markDirty();
-          window.Render.renderMindMap();
-          window.Render.selectNode(touchNode.id);
-          window.Editor.openEditor(touchNode.id);
-        } else if(f.node.template === 'Sub-Tree') {
-          // Create a new Task child node
+        // T on Contact or Sub-Tree creates a Task child that's born completed today
+        if(f.node.template === 'Contact' || f.node.template === 'Sub-Tree') {
           var taskNode = nodeOps.newNode('New Task', 'Task', f.node);
+          taskNode.due = utils.today();
+          taskNode.status = 'done';
           f.node.children.push(taskNode);
+          nodeOps.applyTaskCompletion(taskNode);
           window.Storage.markDirty();
           window.Render.renderMindMap();
           window.Render.selectNode(taskNode.id);
@@ -1038,6 +1051,7 @@ window.Events = (function() {
     switchToMind: switchToMind,
     switchToList: switchToList,
     stageTransform: stageTransform,
+    centerOnNode: centerOnNode,
     applyZoom: applyZoom,
     initWheelZoom: initWheelZoom,
     initPanning: initPanning,

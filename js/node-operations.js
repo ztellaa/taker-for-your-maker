@@ -37,7 +37,6 @@ window.NodeOps = (function() {
     } else if (effective === 'Contact') {
       defaultStatus = 'A-tier';
     }
-    // Touch uses fields['Status'] instead of node.status
 
     var node = {
       id: utils.uuid(),
@@ -52,24 +51,14 @@ window.NodeOps = (function() {
       proxyHighlight: false,
       collapsed: false,
       color: color,
+      colorIsCustom: false,
+      analyticsLogged: false,
       anchored: false,
       children: [],
       pos: parent ? {x:base.x+280+Math.random()*60, y:base.y+(parent.children.length*90+Math.random()*40)} : {x:0,y:0}
     };
 
     ensureTags(node);
-
-    // Set due date to today for Touch nodes
-    if (node.template === 'Touch') {
-      node.due = utils.today();
-    }
-
-    // Auto-scaffolding for Contact template - only create Tasks Sub-Tree
-    if (node.template === 'Contact') {
-      var contactName = node.title || 'Contact';
-      var tasksTree = newNode(contactName + ' Tasks', 'Sub-Tree', node);
-      node.children.push(tasksTree);
-    }
 
     return node;
   }
@@ -138,12 +127,6 @@ window.NodeOps = (function() {
         n.fields['Last Contact'] = n.fields['Last Contact']||'';
         n.fields['Next Contact'] = n.fields['Next Contact']||'';
         n.fields['LinkedIn'] = n.fields['LinkedIn']||'';
-      }
-
-      // Touch-specific field initialization
-      if(n.template==='Touch') {
-        n.fields['Touch Type'] = n.fields['Touch Type']||'';
-        n.fields['Status'] = n.fields['Status']||'Not Completed';
       }
 
       ensureTags(n);
@@ -303,21 +286,6 @@ window.NodeOps = (function() {
     return out;
   }
 
-  // Scaffolding - ensures Contact nodes have Tasks Sub-Tree
-  function ensureScaffolding() {
-    bfs(state.map, function(n){
-      if(n.template==='Contact') {
-        // Match "Tasks" or "<Name> Tasks" pattern
-        var tasksTree = n.children.find(function(c){ return c.template==='Sub-Tree' && /Tasks$/i.test(c.title); });
-        if(!tasksTree) {
-          var contactName = n.title || 'Contact';
-          tasksTree = newNode(contactName + ' Tasks', 'Sub-Tree', n);
-          n.children.push(tasksTree);
-        }
-      }
-    });
-  }
-
   // Node operations
   function addChildOf(parentId) {
     var parent = findNode(parentId).node;
@@ -328,11 +296,6 @@ window.NodeOps = (function() {
     // Default to Task for Contact, Account nodes when no template explicitly selected
     if(!window.DOM.templateSelect.value && (parent.template==='Account'||parent.template==='Contact')) {
       tmpl = 'Task';
-    }
-
-    // Default to Touch for Task nodes when no template explicitly selected
-    if(!window.DOM.templateSelect.value && parent.template==='Task') {
-      tmpl = 'Touch';
     }
 
     var child = newNode(tmpl?tmpl:'New node', tmpl, parent);
@@ -425,6 +388,15 @@ window.NodeOps = (function() {
     return null;
   }
 
+  // "Rotting" - Contact frame color interpolates green (<=2wk since Last
+  // Contact) to red (>=~4mo). No Last Contact at all is treated as most-rotten.
+  function getContactRotColor(contact) {
+    var last = contact && contact.fields && contact.fields['Last Contact'];
+    var days = last ? utils.daysBetween(last, utils.today()) : Infinity;
+    var t = utils.clamp((days - 14) / (120 - 14), 0, 1);
+    return {color: utils.lerpColor('#10b981', '#ef4444', t), days: days};
+  }
+
   // Get all descendant nodes of a specific template type for a Contact (including Sub-Trees)
   function getContactDescendants(contactNode, templateType) {
     if(!contactNode || contactNode.template !== 'Contact') return [];
@@ -442,106 +414,23 @@ window.NodeOps = (function() {
     return getContactDescendants(contactNode, 'Task');
   }
 
-  // Get all Touches for a Contact (including those in Sub-Trees)
-  function getContactTouches(contactNode) {
-    return getContactDescendants(contactNode, 'Touch');
-  }
+  // Apply the side effects of a Task being completed: stamp the parent
+  // Contact's Last Contact (drives "rotting"), and log to Analytics once
+  // if a Channel is set. Idempotent - safe to call on every Task save.
+  function applyTaskCompletion(taskNode) {
+    if(!taskNode || taskNode.template !== 'Task' || taskNode.status !== 'done') return;
 
-  // Handle Touch completion - rolls up to parent Task and Contact
-  function onTouchCompleted(touchNode) {
-    if(!touchNode || touchNode.template !== 'Touch') return;
-    if(!touchNode.fields || touchNode.fields['Status'] !== 'Completed') return;
-
-    // 1. Find and mark parent Task as done
-    var touchInfo = findNode(touchNode.id);
-    var parentTask = touchInfo.parent;
-
-    if(!parentTask || parentTask.template !== 'Task') return;
-
-    parentTask.status = 'done';
-
-    // 2. Find grandparent Contact
-    var contact = findParentContact(parentTask.id);
-
-    if(contact) {
-      // 3. Roll up touch info to Contact's Notes
-      var timestamp = new Date().toLocaleString();
-      var touchType = touchNode.fields['Touch Type'] || 'Touch';
-      var touchNotes = (touchNode.notes || '').split('\n')[0] || '';
-      var touchInfo = timestamp + ': ' + touchType + (touchNotes ? ' - ' + touchNotes : '');
-
-      contact.notes = (contact.notes || '') + touchInfo + '\n\n';
-
-      // 4. Update Contact's Last Contact
-      contact.fields['Last Contact'] = utils.today();
-
-      // 5. Get offset from Contact Frequency or global default
-      var activityOffset = utils.freqToDays(contact.freq) ||
-                          parseInt(window.DOM.defaultOffsetInput.value) || 7;
-      var nextDue = utils.advanceDate(utils.today(), activityOffset);
-
-      // 6. Create new Task under Contact's Tasks Sub-Tree
-      var tasksTree = contact.children.find(function(c) {
-        return c.template === 'Sub-Tree' && /^Tasks$/i.test(c.title);
-      });
-
-      var newTask = newNode('Next contact', 'Task', tasksTree || contact);
-      newTask.due = nextDue;
-      newTask.status = 'todo';
-
-      if(tasksTree) {
-        tasksTree.children.push(newTask);
-      } else {
-        contact.children.push(newTask);
-      }
-
-      // 7. Update Contact's Next Contact
-      contact.fields['Next Contact'] = nextDue;
-    }
-
-    // Record in analytics
-    if(window.Analytics && window.Analytics.recordTouch) {
-      var channel = (touchNode.fields['Touch Type'] || '').toLowerCase();
-      if(channel === 'call') channel = 'calls';
-      else if(channel === 'email') channel = 'emails';
-      window.Analytics.recordTouch(channel);
-    }
-  }
-
-  // Handle Task completion - update parent Contact
-  function onTaskCompleted(taskNode) {
-    if(!taskNode || taskNode.template !== 'Task') return;
-    if(taskNode.status !== 'done') return;
-
-    // Find parent Contact
     var contact = findParentContact(taskNode.id);
-    if(!contact) return;
-
-    // Update Contact's Last Contact
-    contact.fields['Last Contact'] = utils.today();
-
-    // Get offset from Contact Frequency or global default
-    var activityOffset = utils.freqToDays(contact.freq) ||
-                        parseInt(window.DOM.defaultOffsetInput.value) || 7;
-    var nextDue = utils.advanceDate(utils.today(), activityOffset);
-
-    // Create new Task under Contact's Tasks Sub-Tree
-    var tasksTree = contact.children.find(function(c) {
-      return c.template === 'Sub-Tree' && /^Tasks$/i.test(c.title);
-    });
-
-    var newTask = newNode('Next contact', 'Task', tasksTree || contact);
-    newTask.due = nextDue;
-    newTask.status = 'todo';
-
-    if(tasksTree) {
-      tasksTree.children.push(newTask);
-    } else {
-      contact.children.push(newTask);
+    if(contact) {
+      contact.fields['Last Contact'] = utils.today();
     }
 
-    // Update Contact's Next Contact
-    contact.fields['Next Contact'] = nextDue;
+    if(taskNode.fields && taskNode.fields['Channel'] && !taskNode.analyticsLogged) {
+      if(window.Analytics && window.Analytics.recordTouch) {
+        window.Analytics.recordTouch(taskNode.fields['Channel']);
+      }
+      taskNode.analyticsLogged = true;
+    }
   }
 
   // Roll up Note content to parent Contact's Notes field
@@ -556,21 +445,6 @@ window.NodeOps = (function() {
     var rollUpText = timestamp + ': ' + noteContent;
 
     contact.notes = (contact.notes || '') + rollUpText + '\n\n';
-  }
-
-  // Get aggregated touch notes for a Task
-  function getTaskTouchNotes(taskNode) {
-    if(!taskNode || taskNode.template !== 'Task') return [];
-
-    return (taskNode.children || [])
-      .filter(function(c) { return c.template === 'Touch'; })
-      .map(function(t) {
-        var notes = (t.notes || '').split('\n')[0];
-        var touchType = (t.fields && t.fields['Touch Type']) || '';
-        return touchType ? touchType + ': ' + notes : notes;
-      })
-      .filter(Boolean)
-      .slice(0, 2); // Max 2 touch notes
   }
 
   // Legacy function - kept for compatibility but simplified
@@ -631,7 +505,6 @@ window.NodeOps = (function() {
     nextDueForCard: nextDueForCard,
     cumulativeAUM: cumulativeAUM,
     crumbsOf: crumbsOf,
-    ensureScaffolding: ensureScaffolding,
     ensureTags: ensureTags,
     defaultColorForTemplate: defaultColorForTemplate,
     addChildOf: addChildOf,
@@ -642,12 +515,10 @@ window.NodeOps = (function() {
     findOrCreateTask: findOrCreateTask,
     getAvailableChannels: getAvailableChannels,
     findParentContact: findParentContact,
-    onTouchCompleted: onTouchCompleted,
-    onTaskCompleted: onTaskCompleted,
+    getContactRotColor: getContactRotColor,
+    applyTaskCompletion: applyTaskCompletion,
     rollUpNote: rollUpNote,
-    getTaskTouchNotes: getTaskTouchNotes,
     getContactDescendants: getContactDescendants,
-    getContactTasks: getContactTasks,
-    getContactTouches: getContactTouches
+    getContactTasks: getContactTasks
   };
 })();

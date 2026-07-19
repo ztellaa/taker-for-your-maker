@@ -145,6 +145,23 @@ window.Modals = (function() {
       dom.backupsBackdrop.setAttribute('aria-hidden','true');
     };
 
+    if(dom.restoreFromFolderBtn) {
+      dom.restoreFromFolderBtn.onclick = function() {
+        if(!window.FilePersistence) return;
+        window.FilePersistence.readSnapshot().then(function(data) {
+          if(!data || !data.map) {
+            alert('No save file found in the connected CRM folder.');
+            return;
+          }
+          if(confirm('Restore from the CRM folder? Current map will be replaced.')) {
+            storage.applyLoaded(data);
+            dom.backupsBackdrop.style.display = 'none';
+            dom.backupsBackdrop.setAttribute('aria-hidden','true');
+          }
+        });
+      };
+    }
+
     // Mailing modal
     dom.mailingBtn.onclick = function() {
       refreshMailingPreview();

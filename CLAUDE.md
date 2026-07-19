@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**The Seetal Cornish CRM** is a wealth management CRM system designed for RBC advisors. It provides a visual mind map interface for managing contacts, accounts, tasks, and touches. The application runs entirely in the browser with localStorage persistence.
+**The Seetal Cornish CRM** is a wealth management CRM system designed for RBC advisors. It provides a visual mind map interface for managing contacts, accounts, and tasks (including logged contact touches). The application runs entirely in the browser, persisting to localStorage and, optionally, a user-chosen folder on disk.
 
 ## Architecture
 
@@ -21,13 +21,14 @@ The application uses vanilla JavaScript with modules loaded via script tags in a
 7. **node-operations.js** - Node CRUD, tree traversal (BFS/DFS), and node scaffolding
 8. **render.js** - Rendering logic for mind map, links, task list, and stats
 9. **storage.js** - LocalStorage persistence and automatic backup system
-10. **analytics.js** - Weekly business development tracking
-11. **touch-tracker.js** - Touch/contact tracking integration
-12. **editor.js** - Node editing modal and field management
-13. **modals.js** - Backup and mailing list modals
-14. **events.js** - All event handlers (drag-and-drop, zoom, keyboard shortcuts, etc.)
-15. **search-advanced.js** - Advanced search with field-specific queries
-16. **main.js** - Initialization and orchestration
+10. **file-persistence.js** - Folder-backed persistence via the File System Access API (second, independent write path)
+11. **analytics.js** - Weekly business development tracking
+12. **touch-tracker.js** - Generic toast notification helper (name predates the Touch template removal in v14)
+13. **editor.js** - Node editing modal and field management
+14. **modals.js** - Backup, mailing list, and backup-reminder modals
+15. **events.js** - All event handlers (drag-and-drop, zoom, keyboard shortcuts, etc.)
+16. **search-advanced.js** - Advanced search with field-specific queries
+17. **main.js** - Initialization and orchestration
 
 All modules expose their functionality through `window.*` namespaces (e.g., `window.Utils`, `window.AppState`, `window.NodeOps`).
 
@@ -38,7 +39,7 @@ Nodes are tree-structured objects with this shape:
 {
   id: string,           // UUID
   title: string,
-  template: string,     // 'Contact', 'Account', 'Task', 'Touch', 'Note', 'Sub-Tree'
+  template: string,     // 'Contact', 'Account', 'Task', 'Note', 'Sub-Tree'
   status: string,       // 'todo', 'inprogress', 'blocked', 'done', 'A-tier', 'B-tier', 'C-tier', 'Dormant'
   due: string,          // ISO date (YYYY-MM-DD)
   notes: string,
@@ -48,17 +49,17 @@ Nodes are tree-structured objects with this shape:
   proxyHighlight: boolean, // Computed: collapsed node with highlighted descendants
   collapsed: boolean,
   color: string,        // Hex color
+  colorIsCustom: boolean, // True once a Contact's Frame Color is manually set (opts out of "rotting")
+  analyticsLogged: boolean, // Guards against double-counting Analytics when a Task is saved repeatedly
   anchored: boolean,    // Reserved for future use
   children: array,
   pos: {x, y}          // Absolute coordinates in mind map
 }
 ```
 
-### Auto-scaffolding
+### Contact Creation
 
-When creating Contact nodes, the system automatically creates a **Tasks** Sub-Tree child container.
-
-This scaffolding logic lives in `node-operations.js:newNode()`.
+Creating a Contact node no longer auto-scaffolds any child container (the automatic "Tasks" Sub-Tree was removed in v14). New Contacts are created bare; Tasks are added directly under them via `C`/`+Child` or the `T` hotkey.
 
 ### Template System
 
@@ -67,22 +68,22 @@ Templates define the data fields for each node type and optional custom display 
 Key templates:
 - **Contact** - Unified relationship records (combines former Client/COI/Opportunity) with AUM tracking, contact schedules, Contact Frequency
 - **Account** - Financial accounts (RRSP, TFSA, etc.)
-- **Task** - Time-bound action items with status tracking
-- **Touch** - Individual contact attempts (Call, LinkedIn, Email) with status (Not Completed, Attempted, Completed)
+- **Task** - Time-bound action items with status tracking, plus a `Channel` field (Call/LinkedIn/Email) used to log contact touches
 - **Note** - Notes that roll up to parent Contact
 - **Sub-Tree** - Organizational containers with hierarchical font sizing
 
-### Touch Workflow
+### Task-based Touch Logging (v14)
 
-The Touch template tracks individual contact attempts as children of Task nodes:
+The Touch template was removed in v14. Logging a contact touch is now just creating a Task:
 
-1. Create a Task under a Contact (or its Tasks Sub-Tree)
-2. Add Touch children to the Task (keyboard shortcut: T)
-3. When Touch is marked "Completed":
-   - Parent Task is marked done
-   - Touch info rolls up to grandparent Contact's notes with timestamp
-   - Contact's Last Contact is updated
-   - A new follow-up Task is created based on Contact Frequency (or global Activity Offset)
+1. Select a Contact (or a Sub-Tree under one) and press **T**
+2. A new Task is created as a direct child, already `due` today and `status: 'done'`, and the editor opens so you can set its `Channel`
+3. On save, `nodeOps.applyTaskCompletion(taskNode)` runs (also called immediately at creation, and again on any Task save where `status === 'done'`):
+   - The parent Contact's `Last Contact` field is stamped to today - this is what drives "rotting" (see Rendering System below)
+   - If a `Channel` is set and hasn't been logged yet, it's recorded once to the weekly Analytics BD tracker (`Analytics.recordTouch`), guarded by `node.analyticsLogged`
+   - There is **no** automatic follow-up Task creation and **no** note roll-up anymore - the rotting frame color is the only staleness signal now
+
+Existing Touch nodes in older saved data are migrated on load (`storage.js:migrate()`, v14 block) into completed/todo Tasks with a `Channel` field, preserving their notes and due date.
 
 ### Note Roll-up
 
@@ -90,15 +91,17 @@ When a Note is saved, its content automatically rolls up to the parent Contact's
 
 ### Persistence
 
-The application uses two localStorage keys:
-- `wm.mindmap` - Current state, updated on every modification (markDirty)
-- `wm.backups` - Rolling array of last 10 automatic snapshots
+The application writes to two independent stores on every change (`storage.js:markDirty()`), so a failure in one doesn't lose data:
+- **localStorage** - `wm.mindmap` (current state) and `wm.backups` (rolling array of last 10 automatic snapshots)
+- **A user-chosen folder on disk** (`js/file-persistence.js`, File System Access API - Chrome/Edge only) - debounced (~2s) writes to `crm-live-database.json` inside the chosen directory. This was added in v14 after a company-wide Windows update silently broke `localStorage`-only autosave. The folder isn't picked automatically (browsers require a user gesture); click the **CRM Folder** toolbar button and choose the folder. The suggested default path is `window.AppConfig.CrmFolderHint` in `config.js`. The chosen folder handle is remembered across sessions via IndexedDB, re-prompting for permission if the browser requires it. Use **Backups → Restore from CRM Folder** to recover if `localStorage` ever gets wiped.
 
-Backups are triggered:
+localStorage backups are also triggered:
 - Every 30 seconds (if dirty)
 - On visibility change (tab switch/minimize)
 - Before page unload
 - Manual save button
+
+A weekly reminder modal (`main.js:checkBackupReminder()`) nudges the user to copy the CRM folder somewhere safe (OneDrive, USB, etc.) as a manual off-machine backup.
 
 ### Rendering System
 
@@ -106,11 +109,11 @@ The mind map uses a dual-layer rendering approach:
 - **SVG layer** (`#linkLayer`) - White Bezier curves connecting parent-child nodes
 - **HTML layer** (`#nodeLayer`) - Positioned node cards with absolute positioning
 
-Coordinates are managed through `state.zoom`, `state.tx`, `state.ty` and individual `node.pos` values. The stage transform combines global pan/zoom with per-node positions.
+Coordinates are managed through `state.zoom`, `state.tx`, `state.ty` and individual `node.pos` values. The stage transform combines global pan/zoom with per-node positions. On launch, the viewport is centered on the root node (`events.centerOnNode(state.map)`, called from `main.js:init()`).
 
 Node cards have dynamic styling:
 - Task nodes turn green when status is 'done'
-- Touch nodes are red (Not Completed), yellow (Attempted), or green (Completed)
+- **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact.
 
 ### View Modes
 
@@ -150,7 +153,7 @@ python -m http.server 8000
 - **E** - Edit selected node (or Meta card)
 - **C** - Add child node
 - **P** - Create new Contact node
-- **T** - Add Touch to Task
+- **T** - Log a completed Task (Contact or Sub-Tree selection only) - due today, status done
 - **F** - Fold/unfold node
 - **H** - Highlight/flag node
 - **D** - Auto-arrange subtree (creates Meta cards for groups of 8+)
@@ -170,7 +173,7 @@ python -m http.server 8000
 - Card HTML structure: `render.js:renderMindMap()`
 - Node display logic: Template `show()` functions in `config.js`
 - Link rendering: `render.js:drawLinks()`
-- Status-based styling: `styles.css` (.task-done, .touch-completed, etc.)
+- Status-based styling: `styles.css` (.task-done, etc.); Contact rotting color is computed inline in `render.js`, not via CSS classes
 
 ### Adding event handlers
 - All event binding happens in `events.js`
@@ -180,7 +183,8 @@ python -m http.server 8000
 ### Changing persistence format
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
-- Current version: 13.0.7
+- Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`
+- Current version: 14.0.0
 
 ## Date Formatting
 
@@ -203,7 +207,6 @@ Template colors follow RBC's brand guidelines with accessible contrast ratios fo
 Helper functions in `node-operations.js`:
 - `findParentContact(nodeId)` - Traverses up through Sub-Trees to find parent Contact
 - `getContactTasks(contactNode)` - Gets all Tasks under a Contact (including Sub-Trees)
-- `getContactTouches(contactNode)` - Gets all Touches under a Contact
-- `onTouchCompleted(touchNode)` - Handles Touch completion workflow
-- `onTaskCompleted(taskNode)` - Updates Contact when Task is marked done
+- `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact
+- `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
 - `rollUpNote(noteNode)` - Rolls note content to parent Contact

@@ -10,6 +10,7 @@ window.Editor = (function() {
   var validationErrors = {};
   var currentNodeTemplate = null;
   var originalLastContact = null;
+  var originalFrameColor = null;
   var currentNodeId = null;
 
   // Show validation error for a field
@@ -133,7 +134,7 @@ window.Editor = (function() {
   }
 
   function rebuildTemplateSelect(sel) {
-    sel.innerHTML = '<option value="Task">Task</option><option value="Touch">Touch</option><option value="Note">Note</option><option value="Contact">Contact</option><option value="Account">Account</option><option value="Sub-Tree">Sub-Tree</option>';
+    sel.innerHTML = '<option value="Task">Task</option><option value="Note">Note</option><option value="Contact">Contact</option><option value="Account">Account</option><option value="Sub-Tree">Sub-Tree</option>';
   }
 
   function addKVRow(k, v) {
@@ -163,16 +164,12 @@ window.Editor = (function() {
   function setStatusOptions(tmpl, current) {
     var taskOpts = ['todo','inprogress','blocked','done'];
     var tierOpts = ['A-tier','B-tier','C-tier','Dormant'];
-    var touchOpts = ['Not Completed','Attempted','Completed'];
     var opts = [];
 
     if(tmpl === 'Task') {
       opts = taskOpts;
     } else if(tmpl === 'Contact') {
       opts = tierOpts;
-    } else if(tmpl === 'Touch') {
-      // Touch uses fields['Status'], not node.status - disable the main status select
-      opts = [];
     } else {
       opts = [];
     }
@@ -200,7 +197,6 @@ window.Editor = (function() {
 
     var isContactTemplate = (tmpl === 'Contact');
     var isTaskTemplate = (tmpl === 'Task');
-    var isTouchTemplate = (tmpl === 'Touch');
 
     // v13.0.6: Hide title field for Contact (auto-generated from First Name + Last Name)
     titleField.style.display = isContactTemplate ? 'none' : '';
@@ -208,25 +204,16 @@ window.Editor = (function() {
     // Contact Frequency - only for Contact
     freqField.style.display = isContactTemplate ? '' : 'none';
 
-    // Due date - for Task (or completed Touch parent)
+    // Due date - for Task
     dueField.style.display = isTaskTemplate ? '' : 'none';
 
-    // Status dropdown - hide for Touch (uses touchStatusField instead)
-    statusField.style.display = isTouchTemplate ? 'none' : '';
+    statusField.style.display = '';
 
     // Last/Next Contact - for Contact
     lastContactField.style.display = isContactTemplate ? '' : 'none';
     nextContactField.style.display = isContactTemplate ? '' : 'none';
 
-    // Touch Type and Status - for Touch template
-    if(dom.touchTypeField) {
-      dom.touchTypeField.style.display = isTouchTemplate ? '' : 'none';
-    }
-    if(dom.touchStatusField) {
-      dom.touchStatusField.style.display = isTouchTemplate ? '' : 'none';
-    }
-
-    // Available Details (radio buttons) - for Task template
+    // Channel (radio buttons) - for Task template
     if(dom.availableDetailsField) {
       dom.availableDetailsField.style.display = isTaskTemplate ? '' : 'none';
 
@@ -261,6 +248,7 @@ window.Editor = (function() {
 
     // Track original Last Contact for touch detection
     originalLastContact = utils.normalizeDate((node.fields && node.fields['Last Contact']) || '');
+    originalFrameColor = node.color;
 
     dom.f_title.value = node.title || '';
     dom.f_due.value = node.due || '';
@@ -273,20 +261,12 @@ window.Editor = (function() {
     dom.f_lastcontact.value = originalLastContact;
     dom.f_nextcontact.value = utils.normalizeDate((node.fields && node.fields['Next Contact']) || '');
 
-    // Set Touch fields for Touch template
-    if(dom.f_touchType) {
-      dom.f_touchType.value = (node.fields && node.fields['Touch Type']) || '';
-    }
-    if(dom.f_touchStatus) {
-      dom.f_touchStatus.value = (node.fields && node.fields['Status']) || 'Not Completed';
-    }
-
     buildPalette(node.color);
     buildBgPalette(node.bgColor || null);
     dom.kvArea.innerHTML = '';
     var entries = Object.entries(node.fields||{}).filter(function(entry){
       // Filter out fields we handle separately
-      return ['Last Contact','Next Contact','Touch Type','Status'].indexOf(entry[0])===-1;
+      return ['Last Contact','Next Contact','Channel'].indexOf(entry[0])===-1;
     });
     if(entries.length===0) {
       addKVRow('','');
@@ -299,10 +279,11 @@ window.Editor = (function() {
     setStatusOptions(node.template, node.status||'');
     applyVisibility(node.template, node);
 
-    // Reset touch radio buttons
-    if(dom.touch_calls) dom.touch_calls.checked = false;
-    if(dom.touch_linkedin) dom.touch_linkedin.checked = false;
-    if(dom.touch_emails) dom.touch_emails.checked = false;
+    // Restore Channel radio selection for Task
+    var savedChannel = (node.fields && node.fields['Channel']) || '';
+    if(dom.touch_calls) dom.touch_calls.checked = (savedChannel === 'calls');
+    if(dom.touch_linkedin) dom.touch_linkedin.checked = (savedChannel === 'linkedin');
+    if(dom.touch_emails) dom.touch_emails.checked = (savedChannel === 'emails');
 
     // Auto-calculate Next Contact when Last Contact changes
     dom.f_lastcontact.onchange = function() {
@@ -372,8 +353,6 @@ window.Editor = (function() {
       }
 
       var prevTemplate = node.template;
-      var prevStatus = node.status;
-      var prevTouchStatus = (node.fields && node.fields['Status']) || '';
 
       // v13.0.6: For Contact, auto-generate title from First Name + Last Name
       if(dom.f_template.value === 'Contact' || node.template === 'Contact') {
@@ -435,32 +414,25 @@ window.Editor = (function() {
         node.fields['Next Contact'] = dom.f_nextcontact.value || '';
       }
 
-      // Save Touch Type and Status for Touch template
-      if(dom.touchTypeField && dom.touchTypeField.style.display !== 'none') {
-        node.fields['Touch Type'] = dom.f_touchType.value || '';
-      }
-      if(dom.touchStatusField && dom.touchStatusField.style.display !== 'none') {
-        node.fields['Status'] = dom.f_touchStatus.value || 'Not Completed';
+      // Save Channel for Task template
+      if(dom.availableDetailsField && dom.availableDetailsField.style.display !== 'none') {
+        var checkedChannel = document.querySelector('input[name="taskTouchType"]:checked');
+        node.fields['Channel'] = checkedChannel ? checkedChannel.value : '';
       }
 
       nodeOps.ensureTags(node);
+      if(node.template === 'Contact' && state.selectedPaletteColor && state.selectedPaletteColor !== originalFrameColor) {
+        node.colorIsCustom = true;
+      }
       node.color = state.selectedPaletteColor || node.color;
       node.bgColor = selectedBgColor || null;
 
       dom.editorBackdrop.style.display = 'none';
       dom.editorBackdrop.setAttribute('aria-hidden','true');
 
-      // Handle Touch completion
-      if(node.template === 'Touch') {
-        var newTouchStatus = node.fields['Status'] || '';
-        if(newTouchStatus === 'Completed' && prevTouchStatus !== 'Completed') {
-          nodeOps.onTouchCompleted(node);
-        }
-      }
-
-      // Handle Task completion - update parent Contact
-      if(node.template === 'Task' && node.status === 'done' && prevStatus !== 'done') {
-        nodeOps.onTaskCompleted(node);
+      // Handle Task completion side effects (Last Contact stamp, Analytics)
+      if(node.template === 'Task') {
+        nodeOps.applyTaskCompletion(node);
       }
 
       // Handle Note roll-up

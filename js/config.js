@@ -8,7 +8,6 @@ window.AppConfig = {
     'Contact':'#003168',    // RBC Blue (unified from Client/COI/Opportunity)
     'Account':'#10b981',    // Green
     'Task':'#f59e0b',       // Orange
-    'Touch':'#4CAF50',      // Green for touches
     'Note':'#38bdf8',       // Light Blue
     'Sub-Tree':'#0073cc'    // Dark Blue
   },
@@ -18,10 +17,12 @@ window.AppConfig = {
     'Contact':'#003168',    // RBC Blue
     'Account':'#10b981',    // Green
     'Task':'#f59e0b',       // Orange
-    'Touch':'#4CAF50',      // Green
     'Note':'#06b6d4',       // Cyan
     'Sub-Tree':'#6366f1'    // Indigo
   },
+
+  // Default directory hint for folder-backed persistence (see js/file-persistence.js)
+  CrmFolderHint: 'C:\\Users\\591556352\\Local\\CRM\\actual_database',
 
   // Template definitions with fields and custom display functions
   Templates: {
@@ -87,38 +88,9 @@ window.AppConfig = {
       }
     },
     'Task': {
-      fields: {'Tags':''},
+      fields: {'Tags':'', 'Channel':''},
       show: function(n) {
         return '<strong>'+window.Utils.esc(n.title)+'</strong>'+(n.due?'<div>Due: '+window.Utils.formatDateDisplay(n.due)+'</div>':'');
-      }
-    },
-    'Touch': {
-      // Touch template - child of Task, tracks individual contact attempts
-      fields: {
-        'Touch Type':'',   // Call, LinkedIn, or Email
-        'Status':'Not Completed',  // Not Completed, Attempted, Completed
-        'Tags':''
-      },
-      show: function(n) {
-        // Display "Touch - <date>" as title with touch type
-        var touchDate = n.due ? window.Utils.formatDateDisplay(n.due) : window.Utils.formatDateDisplay(new Date().toISOString().slice(0,10));
-        var touchType = (n.fields && n.fields['Touch Type']) || '';
-        var titleLine = (touchType ? touchType + ' - ' : 'Touch - ') + touchDate;
-
-        // Notes preview
-        var notes = (n.notes || '');
-        var lines = notes.split('\n').filter(function(l) { return l.trim(); });
-        var previewLines = lines.slice(0, 2);
-        var previewHtml = previewLines.length ?
-          '<div style="font-size:12px;color:#9aa3b2;margin-top:4px">' +
-          previewLines.map(function(l) { return window.Utils.esc(l); }).join('<br>') +
-          '</div>' : '';
-
-        var statusBadge = (n.fields && n.fields['Status']) ?
-          '<div style="font-size:11px;margin-top:4px"><span style="background:' +
-          (n.fields['Status']==='Completed'?'#10b981':n.fields['Status']==='Attempted'?'#f59e0b':'#6b7280') +
-          ';padding:2px 6px;border-radius:4px;color:#fff">' + window.Utils.esc(n.fields['Status']) + '</span></div>' : '';
-        return '<strong>' + window.Utils.esc(titleLine) + '</strong>' + statusBadge + previewHtml;
       }
     },
     'Note': {
