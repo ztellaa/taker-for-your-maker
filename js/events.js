@@ -94,12 +94,9 @@ window.Events = (function() {
   // inside initButtonHandlers) so it's available to storage.js:restore(),
   // which runs before initButtonHandlers() during app init.
   function applyMapBackground(color) {
-    var el = dom.stageWrap;
-    if(color) {
-      el.style.cssText = 'background-color: ' + color + ' !important; background-image: none !important;';
-    } else {
-      el.style.cssText = '';
-    }
+    // Only recolor the base tint - leave .stage-wrap's ripple/checkerboard
+    // background-image texture alone so it isn't lost on a color change.
+    dom.stageWrap.style.backgroundColor = color || '';
     state.mapBgColor = color;
   }
 

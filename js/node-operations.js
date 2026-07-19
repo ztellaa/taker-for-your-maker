@@ -404,15 +404,6 @@ window.NodeOps = (function() {
     return null;
   }
 
-  // "Rotting" - Contact frame color interpolates green (<=2wk since Last
-  // Contact) to red (>=~4mo). No Last Contact at all is treated as most-rotten.
-  function getContactRotColor(contact) {
-    var last = contact && contact.fields && contact.fields['Last Contact'];
-    var days = last ? utils.daysBetween(last, utils.today()) : Infinity;
-    var t = utils.clamp((days - 14) / (120 - 14), 0, 1);
-    return {color: utils.lerpColor('#10b981', '#ef4444', t), days: days};
-  }
-
   // Get all descendant nodes of a specific template type for a Contact (including Sub-Trees)
   function getContactDescendants(contactNode, templateType) {
     if(!contactNode || contactNode.template !== 'Contact') return [];
@@ -428,6 +419,35 @@ window.NodeOps = (function() {
   // Get all Tasks for a Contact (including those in Sub-Trees)
   function getContactTasks(contactNode) {
     return getContactDescendants(contactNode, 'Task');
+  }
+
+  // The soonest-due not-done Task under a Contact (any depth), or null if
+  // there isn't one. Since it's the soonest, if it's overdue then every
+  // open Task is overdue too - "is anything overdue" and "what's next" are
+  // both answered by this same lookup.
+  function getContactNextOpenTask(contactNode) {
+    var openTasks = getContactTasks(contactNode).filter(function(t) {
+      return t.status !== 'done' && t.due;
+    });
+    if(!openTasks.length) return null;
+    openTasks.sort(function(a, b) { return a.due < b.due ? -1 : (a.due > b.due ? 1 : 0); });
+    return openTasks[0];
+  }
+
+  // "Rotting" - Contact frame color interpolates green (<=2wk since Last
+  // Contact) to red (>=~4mo). No Last Contact at all is treated as most-rotten.
+  // An overdue open Task forces full rot regardless of Last Contact recency.
+  function getContactRotColor(contact) {
+    var last = contact && contact.fields && contact.fields['Last Contact'];
+    var days = last ? utils.daysBetween(last, utils.today()) : Infinity;
+
+    var openTask = getContactNextOpenTask(contact);
+    if(openTask && openTask.due < utils.today()) {
+      days = Infinity;
+    }
+
+    var t = utils.clamp((days - 14) / (120 - 14), 0, 1);
+    return {color: utils.lerpColor('#10b981', '#ef4444', t), days: days};
   }
 
   // Apply the side effects of a Task being completed: stamp the parent
@@ -536,6 +556,7 @@ window.NodeOps = (function() {
     applyTaskCompletion: applyTaskCompletion,
     rollUpNote: rollUpNote,
     getContactDescendants: getContactDescendants,
-    getContactTasks: getContactTasks
+    getContactTasks: getContactTasks,
+    getContactNextOpenTask: getContactNextOpenTask
   };
 })();

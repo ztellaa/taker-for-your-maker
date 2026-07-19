@@ -117,7 +117,8 @@ Coordinates are managed through `state.zoom`, `state.tx`, `state.ty` and individ
 
 Node cards have dynamic styling:
 - Task nodes turn green when status is 'done'
-- **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact.
+- **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact. An overdue not-done Task anywhere under the Contact (`nodeOps.getContactNextOpenTask()`) forces full rot regardless of how recent Last Contact is (v14.1.1).
+- **"Next" display** (v14.1.1) - the Contact card's "Next: `<date>`" badge no longer reflects the standalone `fields['Next Contact']` field. It only appears when there's an actual outstanding (not-done) Task under the Contact, showing that Task's due date (overdue = red badge, future = plain). No open Task means no "Next" badge at all. The `Next Contact` field/editor input still exists in the data model for manual reference, but no longer drives what's shown on the card.
 
 ### View Modes
 
@@ -188,7 +189,7 @@ python -m http.server 8000
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
 - Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`
-- Current version: 14.1.0
+- Current version: 14.1.1
 
 ## Date Formatting
 
@@ -211,6 +212,7 @@ Template colors follow RBC's brand guidelines with accessible contrast ratios fo
 Helper functions in `node-operations.js`:
 - `findParentContact(nodeId)` - Traverses up through Sub-Trees to find parent Contact
 - `getContactTasks(contactNode)` - Gets all Tasks under a Contact (including Sub-Trees)
-- `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact
+- `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact (or forced full-rot if there's an overdue open Task)
+- `getContactNextOpenTask(contact)` - Returns the soonest-due not-done Task under a Contact (any depth), or `null`
 - `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
 - `rollUpNote(noteNode)` - Rolls note content to parent Contact

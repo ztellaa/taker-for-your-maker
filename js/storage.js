@@ -6,7 +6,7 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '14.1.0';
+  var CURRENT_VERSION = '14.1.1';
 
   function markDirty() {
     state.lastDirty = Date.now();

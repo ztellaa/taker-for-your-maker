@@ -148,20 +148,18 @@ window.Render = (function() {
         }
         // Contact dates
         var lastContact = (n.fields && n.fields['Last Contact']) || '';
-        var nextContact = (n.fields && n.fields['Next Contact']) || '';
         if(lastContact) {
           metaFragments.push('<span>Last: ' + utils.formatDateDisplay(lastContact) + '</span>');
         }
-        if(nextContact) {
-          var isOverdueContact = false;
-          var contactDate = new Date(utils.normalizeDate(nextContact));
-          var today = new Date();
-          today.setHours(0, 0, 0, 0);
-          isOverdueContact = contactDate < today;
+        // "Next" only shows when there's an actual outstanding (not-done) Task -
+        // driven by that Task's due date, not the standalone Next Contact field.
+        var openTask = nodeOps.getContactNextOpenTask(n);
+        if(openTask) {
+          var isOverdueContact = openTask.due < utils.today();
           if(isOverdueContact) {
-            metaFragments.push('<span class="badge danger">⚠ Next: ' + utils.formatDateDisplay(nextContact) + '</span>');
+            metaFragments.push('<span class="badge danger">⚠ Next: ' + utils.formatDateDisplay(openTask.due) + '</span>');
           } else {
-            metaFragments.push('<span>Next: ' + utils.formatDateDisplay(nextContact) + '</span>');
+            metaFragments.push('<span>Next: ' + utils.formatDateDisplay(openTask.due) + '</span>');
           }
         }
       }
