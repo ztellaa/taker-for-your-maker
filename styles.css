@@ -879,9 +879,10 @@
     animation: pulseGlow 1.2s ease-in-out infinite;
   }
 
-  /* Task completed styling */
+  /* Task completed styling - background is not !important so a custom
+     card Background Color (inline, set by render.js) can still win */
   .node.task-done {
-    background: linear-gradient(135deg, #1a3d1a, #0f2d0f) !important;
+    background: linear-gradient(135deg, #1a3d1a, #0f2d0f);
     border-color: #2d5a2d !important;
   }
 

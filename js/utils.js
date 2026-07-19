@@ -193,8 +193,46 @@ window.Utils = {
     return /[",\n]/.test(v) ? '"'+v+'"' : v;
   },
 
+  // Parse CSV text into an array of row arrays. Handles quoted fields
+  // containing commas/newlines and escaped ("") quotes, mirroring the
+  // quoting csvEsc() produces on export. Blank lines are skipped.
+  parseCSV: function(text) {
+    var rows = [];
+    var row = [];
+    var field = '';
+    var inQuotes = false;
+    var s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    for(var i = 0; i < s.length; i++) {
+      var c = s[i];
+      if(inQuotes) {
+        if(c === '"') {
+          if(s[i+1] === '"') { field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else if(c === '"') {
+        inQuotes = true;
+      } else if(c === ',') {
+        row.push(field); field = '';
+      } else if(c === '\n') {
+        row.push(field); field = '';
+        rows.push(row); row = [];
+      } else {
+        field += c;
+      }
+    }
+    if(field.length || row.length) {
+      row.push(field);
+      rows.push(row);
+    }
+
+    return rows.filter(function(r) { return !(r.length === 1 && r[0].trim() === ''); });
+  },
+
   // Convert frequency to days
   freqToDays: function(freq) {
-    return ({monthly:30, quarterly:90, biannually:182, annually:365}[freq]||90);
+    return ({daily:1, monthly:30, quarterly:90, biannually:182, annually:365}[freq]||90);
   }
 };

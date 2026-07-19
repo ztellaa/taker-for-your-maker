@@ -77,12 +77,7 @@ window.Render = (function() {
     clearLayers();
     updateStats();
 
-    var visible = new Set();
-    (function walk(n) {
-      visible.add(n.id);
-      if(n.collapsed) return;
-      n.children.forEach(walk);
-    })(state.map);
+    var visible = nodeOps.getVisibleIds();
 
     var cardMap = new Map();
 
@@ -111,8 +106,14 @@ window.Render = (function() {
       } else {
         card.style.borderColor = utils.shade(n.color, -0.2);
       }
-      if(n.bgColor) {
+      if(n.template === 'Contact' && nodeOps.isRecentlyCompleted(n)) {
+        // A Task completed today or yesterday - temporarily override the
+        // card background with the same "done" green used elsewhere, then
+        // fall back to the default/custom background after that window.
+        card.style.background = 'linear-gradient(135deg, #1a3d1a, #0f2d0f)';
+      } else if(n.bgColor) {
         card.style.backgroundColor = n.bgColor;
+        card.style.backgroundImage = 'none'; // suppress .task-done's gradient image so custom bg always wins
       }
 
       var typeChip = '<span class="chip"><span class="swatch" style="background:' + (config.TemplateChipColors[n.template] || '#6b7280') + '"></span>' + utils.esc(n.template) + '</span>';
@@ -152,20 +153,18 @@ window.Render = (function() {
         }
         // Contact dates
         var lastContact = (n.fields && n.fields['Last Contact']) || '';
-        var nextContact = (n.fields && n.fields['Next Contact']) || '';
         if(lastContact) {
           metaFragments.push('<span>Last: ' + utils.formatDateDisplay(lastContact) + '</span>');
         }
-        if(nextContact) {
-          var isOverdueContact = false;
-          var contactDate = new Date(utils.normalizeDate(nextContact));
-          var today = new Date();
-          today.setHours(0, 0, 0, 0);
-          isOverdueContact = contactDate < today;
+        // "Next" only shows when there's an actual outstanding (not-done) Task -
+        // driven by that Task's due date, not the standalone Next Contact field.
+        var openTask = nodeOps.getContactNextOpenTask(n);
+        if(openTask) {
+          var isOverdueContact = openTask.due < utils.today();
           if(isOverdueContact) {
-            metaFragments.push('<span class="badge danger">⚠ Next: ' + utils.formatDateDisplay(nextContact) + '</span>');
+            metaFragments.push('<span class="badge danger">⚠ Next: ' + utils.formatDateDisplay(openTask.due) + '</span>');
           } else {
-            metaFragments.push('<span>Next: ' + utils.formatDateDisplay(nextContact) + '</span>');
+            metaFragments.push('<span>Next: ' + utils.formatDateDisplay(openTask.due) + '</span>');
           }
         }
       }

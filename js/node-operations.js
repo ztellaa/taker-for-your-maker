@@ -27,6 +27,9 @@ window.NodeOps = (function() {
     var tFields = (config.Templates[effective] && config.Templates[effective].fields) ?
       (function(o){var c={}; for(var k in o){ if(Object.prototype.hasOwnProperty.call(o,k)) c[k]=o[k]; } return c;})(config.Templates[effective].fields) : {};
     if(!tFields['Tags']) tFields['Tags']='';
+    if(effective === 'Contact') {
+      tFields['Last Contact'] = utils.today();
+    }
 
     var color = (parent && parent.template==='Sub-Tree') ? (parent.color||defaultColorForTemplate(effective)) : defaultColorForTemplate(effective);
 
@@ -46,13 +49,14 @@ window.NodeOps = (function() {
       due: '',
       notes: '',
       fields: tFields,
-      freq: '',
+      freq: (effective === 'Contact') ? 'daily' : '',
       highlight: false,
       proxyHighlight: false,
       collapsed: false,
       color: color,
       colorIsCustom: false,
       analyticsLogged: false,
+      lastTaskCompletedDate: '',
       anchored: false,
       children: [],
       pos: parent ? {x:base.x+280+Math.random()*60, y:base.y+(parent.children.length*90+Math.random()*40)} : {x:0,y:0}
@@ -81,6 +85,19 @@ window.NodeOps = (function() {
       if(n.id===id) { out=n; parent=p; }
     });
     return {node:out, parent:parent};
+  }
+
+  // Set of ids currently visible in the rendered tree (excludes descendants
+  // of a collapsed node). Shared by render.js and the drag-overlap logic in
+  // events.js so dragging can't collide with cards the user can't see.
+  function getVisibleIds() {
+    var visible = new Set();
+    (function walk(n) {
+      visible.add(n.id);
+      if(n.collapsed) return;
+      n.children.forEach(walk);
+    })(state.map);
+    return visible;
   }
 
   function isDescendant(ancestorId, id) {
@@ -388,15 +405,6 @@ window.NodeOps = (function() {
     return null;
   }
 
-  // "Rotting" - Contact frame color interpolates green (<=2wk since Last
-  // Contact) to red (>=~4mo). No Last Contact at all is treated as most-rotten.
-  function getContactRotColor(contact) {
-    var last = contact && contact.fields && contact.fields['Last Contact'];
-    var days = last ? utils.daysBetween(last, utils.today()) : Infinity;
-    var t = utils.clamp((days - 14) / (120 - 14), 0, 1);
-    return {color: utils.lerpColor('#10b981', '#ef4444', t), days: days};
-  }
-
   // Get all descendant nodes of a specific template type for a Contact (including Sub-Trees)
   function getContactDescendants(contactNode, templateType) {
     if(!contactNode || contactNode.template !== 'Contact') return [];
@@ -414,15 +422,47 @@ window.NodeOps = (function() {
     return getContactDescendants(contactNode, 'Task');
   }
 
+  // The soonest-due not-done Task under a Contact (any depth), or null if
+  // there isn't one. Since it's the soonest, if it's overdue then every
+  // open Task is overdue too - "is anything overdue" and "what's next" are
+  // both answered by this same lookup.
+  function getContactNextOpenTask(contactNode) {
+    var openTasks = getContactTasks(contactNode).filter(function(t) {
+      return t.status !== 'done' && t.due;
+    });
+    if(!openTasks.length) return null;
+    openTasks.sort(function(a, b) { return a.due < b.due ? -1 : (a.due > b.due ? 1 : 0); });
+    return openTasks[0];
+  }
+
+  // "Rotting" - Contact frame color interpolates green (<=2wk since Last
+  // Contact) to red (>=~4mo). No Last Contact at all is treated as most-rotten.
+  // An overdue open Task forces full rot regardless of Last Contact recency.
+  function getContactRotColor(contact) {
+    var last = contact && contact.fields && contact.fields['Last Contact'];
+    var days = last ? utils.daysBetween(last, utils.today()) : Infinity;
+
+    var openTask = getContactNextOpenTask(contact);
+    if(openTask && openTask.due < utils.today()) {
+      days = Infinity;
+    }
+
+    var t = utils.clamp((days - 14) / (120 - 14), 0, 1);
+    return {color: utils.lerpColor('#10b981', '#ef4444', t), days: days};
+  }
+
   // Apply the side effects of a Task being completed: stamp the parent
-  // Contact's Last Contact (drives "rotting"), and log to Analytics once
-  // if a Channel is set. Idempotent - safe to call on every Task save.
+  // Contact's Last Contact (drives "rotting") and lastTaskCompletedDate
+  // (drives the temporary green card background below), and log to
+  // Analytics once if a Channel is set. Idempotent - safe to call on every
+  // Task save.
   function applyTaskCompletion(taskNode) {
     if(!taskNode || taskNode.template !== 'Task' || taskNode.status !== 'done') return;
 
     var contact = findParentContact(taskNode.id);
     if(contact) {
       contact.fields['Last Contact'] = utils.today();
+      contact.lastTaskCompletedDate = utils.today();
     }
 
     if(taskNode.fields && taskNode.fields['Channel'] && !taskNode.analyticsLogged) {
@@ -431,6 +471,15 @@ window.NodeOps = (function() {
       }
       taskNode.analyticsLogged = true;
     }
+  }
+
+  // True if a Task under this Contact completed today or yesterday - drives
+  // a temporary green card background (see render.js) separate from the
+  // border-based "rotting" indicator.
+  function isRecentlyCompleted(contact) {
+    var d = contact && contact.lastTaskCompletedDate;
+    if(!d) return false;
+    return utils.daysBetween(d, utils.today()) <= 1;
   }
 
   // Roll up Note content to parent Contact's Notes field
@@ -497,6 +546,7 @@ window.NodeOps = (function() {
     newNode: newNode,
     bfs: bfs,
     findNode: findNode,
+    getVisibleIds: getVisibleIds,
     isDescendant: isDescendant,
     depthOf: depthOf,
     ensurePositions: ensurePositions,
@@ -516,9 +566,11 @@ window.NodeOps = (function() {
     getAvailableChannels: getAvailableChannels,
     findParentContact: findParentContact,
     getContactRotColor: getContactRotColor,
+    isRecentlyCompleted: isRecentlyCompleted,
     applyTaskCompletion: applyTaskCompletion,
     rollUpNote: rollUpNote,
     getContactDescendants: getContactDescendants,
-    getContactTasks: getContactTasks
+    getContactTasks: getContactTasks,
+    getContactNextOpenTask: getContactNextOpenTask
   };
 })();

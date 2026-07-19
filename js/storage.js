@@ -6,7 +6,7 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '14.0.0';
+  var CURRENT_VERSION = '14.1.2';
 
   function markDirty() {
     state.lastDirty = Date.now();
@@ -242,6 +242,7 @@ window.Storage = (function() {
       // Backfill v14 node flags
       if (n.colorIsCustom == null) n.colorIsCustom = false;
       if (n.analyticsLogged == null) n.analyticsLogged = false;
+      if (n.lastTaskCompletedDate == null) n.lastTaskCompletedDate = '';
 
       // Contact-specific field initialization
       if (n.template === 'Contact') {
@@ -284,6 +285,10 @@ window.Storage = (function() {
           var m = migrate(data);
           state.map = m.map;
           state.selectedId = state.map.id;
+          state.mapBgColor = data.mapBgColor || null;
+          if(window.Events && window.Events.applyMapBackground) {
+            window.Events.applyMapBackground(state.mapBgColor);
+          }
           nodeOps.ensurePositions();
           window.Render.renderMindMap();
           window.Render.buildList();

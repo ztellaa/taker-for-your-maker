@@ -25,7 +25,7 @@ The application uses vanilla JavaScript with modules loaded via script tags in a
 11. **analytics.js** - Weekly business development tracking
 12. **touch-tracker.js** - Generic toast notification helper (name predates the Touch template removal in v14)
 13. **editor.js** - Node editing modal and field management
-14. **modals.js** - Backup, mailing list, and backup-reminder modals
+14. **modals.js** - Backup, mailing list, CSV import, and backup-reminder modals
 15. **events.js** - All event handlers (drag-and-drop, zoom, keyboard shortcuts, etc.)
 16. **search-advanced.js** - Advanced search with field-specific queries
 17. **main.js** - Initialization and orchestration
@@ -44,13 +44,14 @@ Nodes are tree-structured objects with this shape:
   due: string,          // ISO date (YYYY-MM-DD)
   notes: string,
   fields: object,       // Template-specific fields
-  freq: string,         // 'monthly', 'quarterly', 'biannually', 'annually'
+  freq: string,         // 'daily', 'monthly', 'quarterly', 'biannually', 'annually' (Contact defaults to 'daily')
   highlight: boolean,   // User flag for important nodes
   proxyHighlight: boolean, // Computed: collapsed node with highlighted descendants
   collapsed: boolean,
   color: string,        // Hex color
   colorIsCustom: boolean, // True once a Contact's Frame Color is manually set (opts out of "rotting")
   analyticsLogged: boolean, // Guards against double-counting Analytics when a Task is saved repeatedly
+  lastTaskCompletedDate: string, // ISO date a child Task last completed; drives the 2-day "just completed" green card background
   anchored: boolean,    // Reserved for future use
   children: array,
   pos: {x, y}          // Absolute coordinates in mind map
@@ -59,7 +60,11 @@ Nodes are tree-structured objects with this shape:
 
 ### Contact Creation
 
-Creating a Contact node no longer auto-scaffolds any child container (the automatic "Tasks" Sub-Tree was removed in v14). New Contacts are created bare; Tasks are added directly under them via `C`/`+Child` or the `T` hotkey.
+Creating a Contact node no longer auto-scaffolds any child container (the automatic "Tasks" Sub-Tree was removed in v14). New Contacts are created bare; Tasks are added directly under them via `C`/`+Child` or the `T` hotkey. New Contacts default to `freq: 'daily'` and `fields['Last Contact']` set to today (`node-operations.js:newNode()`) so they start "fresh"/green under rotting instead of immediately showing as most-rotten for having no contact on record. This applies uniformly to Contacts created via `P`, `+Child`, and CSV import (below), since all three go through `newNode()`.
+
+### CSV Import
+
+The **Import** toolbar button opens a modal (`js/modals.js`, `#importBackdrop` in `index.html`) for bulk-creating Contacts from pasted or uploaded CSV data. Column headers are matched case-insensitively and don't need to be in a fixed order: a `Name` column is split on the first space into First/Last Name; otherwise separate `First Name`/`Last Name` columns are used. `Email`, `Phone` (or `Cell`/`Cell Number`/`Phone Number`), and `Notes`/`Note` are also recognized; unrecognized columns are ignored. The modal shows a copyable example template and a preview before import. Each import run creates one new "CSV Import `<date>`" Sub-Tree under the currently selected node (or root if nothing is selected), and all imported Contacts are added under that Sub-Tree - keeping each batch visually grouped rather than dumped loose into the parent. Contacts get the same Daily/Last-Contact-today defaults as any other new Contact, since they're all created via `nodeOps.newNode()`.
 
 ### Template System
 
@@ -113,7 +118,9 @@ Coordinates are managed through `state.zoom`, `state.tx`, `state.ty` and individ
 
 Node cards have dynamic styling:
 - Task nodes turn green when status is 'done'
-- **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact.
+- **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact. An overdue not-done Task anywhere under the Contact (`nodeOps.getContactNextOpenTask()`) forces full rot regardless of how recent Last Contact is (v14.1.1).
+- **"Next" display** (v14.1.1) - the Contact card's "Next: `<date>`" badge no longer reflects the standalone `fields['Next Contact']` field. It only appears when there's an actual outstanding (not-done) Task under the Contact, showing that Task's due date (overdue = red badge, future = plain). No open Task means no "Next" badge at all. The `Next Contact` field/editor input still exists in the data model for manual reference, but no longer drives what's shown on the card.
+- **"Just completed" glow** (v14.1.2) - a Contact card's *background* (separate from the border-based rotting color) temporarily switches to the same dark-green gradient used for done Tasks whenever a Task under it completed today or yesterday (`node.lastTaskCompletedDate`, stamped by `applyTaskCompletion()`; checked via `nodeOps.isRecentlyCompleted()`). This overrides any custom card Background Color for that 2-day window, then falls back to the custom color (or the default panel background) automatically once the window passes - there's no cleanup step, it's just a live date comparison on every render.
 
 ### View Modes
 
@@ -184,7 +191,7 @@ python -m http.server 8000
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
 - Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`
-- Current version: 14.0.0
+- Current version: 14.1.2
 
 ## Date Formatting
 
@@ -207,6 +214,8 @@ Template colors follow RBC's brand guidelines with accessible contrast ratios fo
 Helper functions in `node-operations.js`:
 - `findParentContact(nodeId)` - Traverses up through Sub-Trees to find parent Contact
 - `getContactTasks(contactNode)` - Gets all Tasks under a Contact (including Sub-Trees)
-- `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact
+- `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact (or forced full-rot if there's an overdue open Task)
+- `getContactNextOpenTask(contact)` - Returns the soonest-due not-done Task under a Contact (any depth), or `null`
+- `isRecentlyCompleted(contact)` - True if `lastTaskCompletedDate` is today or yesterday; drives the temporary green card background
 - `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
 - `rollUpNote(noteNode)` - Rolls note content to parent Contact
