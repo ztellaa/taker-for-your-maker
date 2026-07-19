@@ -93,6 +93,19 @@ window.DOM = (function() {
     downloadCSVBtn: $('#downloadCSV'),
     closeMailingBtn: $('#closeMailing'),
 
+    // Import modal
+    importBtn: $('#importBtn'),
+    importBackdrop: $('#importBackdrop'),
+    importTemplateBox: $('#importTemplateBox'),
+    copyImportTemplateBtn: $('#copyImportTemplateBtn'),
+    importCsvText: $('#importCsvText'),
+    importFileInput: $('#importFileInput'),
+    loadImportFileBtn: $('#loadImportFileBtn'),
+    previewImportBtn: $('#previewImportBtn'),
+    importPreviewList: $('#importPreviewList'),
+    confirmImportBtn: $('#confirmImportBtn'),
+    closeImportBtn: $('#closeImportBtn'),
+
     // Search help modal
     searchHelpBackdrop: $('#searchHelpBackdrop'),
     searchHelpBtn: $('#searchHelpBtn'),

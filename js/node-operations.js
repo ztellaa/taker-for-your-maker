@@ -27,6 +27,9 @@ window.NodeOps = (function() {
     var tFields = (config.Templates[effective] && config.Templates[effective].fields) ?
       (function(o){var c={}; for(var k in o){ if(Object.prototype.hasOwnProperty.call(o,k)) c[k]=o[k]; } return c;})(config.Templates[effective].fields) : {};
     if(!tFields['Tags']) tFields['Tags']='';
+    if(effective === 'Contact') {
+      tFields['Last Contact'] = utils.today();
+    }
 
     var color = (parent && parent.template==='Sub-Tree') ? (parent.color||defaultColorForTemplate(effective)) : defaultColorForTemplate(effective);
 
@@ -46,7 +49,7 @@ window.NodeOps = (function() {
       due: '',
       notes: '',
       fields: tFields,
-      freq: '',
+      freq: (effective === 'Contact') ? 'daily' : '',
       highlight: false,
       proxyHighlight: false,
       collapsed: false,
@@ -81,6 +84,19 @@ window.NodeOps = (function() {
       if(n.id===id) { out=n; parent=p; }
     });
     return {node:out, parent:parent};
+  }
+
+  // Set of ids currently visible in the rendered tree (excludes descendants
+  // of a collapsed node). Shared by render.js and the drag-overlap logic in
+  // events.js so dragging can't collide with cards the user can't see.
+  function getVisibleIds() {
+    var visible = new Set();
+    (function walk(n) {
+      visible.add(n.id);
+      if(n.collapsed) return;
+      n.children.forEach(walk);
+    })(state.map);
+    return visible;
   }
 
   function isDescendant(ancestorId, id) {
@@ -497,6 +513,7 @@ window.NodeOps = (function() {
     newNode: newNode,
     bfs: bfs,
     findNode: findNode,
+    getVisibleIds: getVisibleIds,
     isDescendant: isDescendant,
     depthOf: depthOf,
     ensurePositions: ensurePositions,

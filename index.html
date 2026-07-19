@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>RBC Wealth Map – v14.0.0</title>
+<title>RBC Wealth Map – v14.1.0</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -34,6 +34,7 @@
       <button class="btn" id="foldBtn" type="button">Fold</button>
       <button class="btn danger" id="deleteNode" type="button">Delete</button>
       <button class="btn" id="mailingBtn" type="button">Mailing</button>
+      <button class="btn" id="importBtn" type="button">Import</button>
       <div class="search-container">
         <input id="search" type="text" placeholder="Search nodes…" />
         <button class="btn small" id="searchHelpBtn" type="button" title="Search help">?</button>
@@ -191,6 +192,7 @@
       <div class="field"><label for="f_nextcontact">Next Contact</label><input id="f_nextcontact" type="date" /></div>
       <div class="field"><label for="f_freq">Contact Frequency</label><select id="f_freq">
         <option value="">—</option>
+        <option value="daily">Daily</option>
         <option value="monthly">Monthly</option>
         <option value="quarterly">Quarterly</option>
         <option value="biannually">Bi-Annually</option>
@@ -271,6 +273,34 @@
       <button class="btn" id="refreshPreview" type="button">Refresh</button>
       <button class="btn accent" id="downloadCSV" type="button">Download CSV</button>
       <button class="btn" id="closeMailing" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-backdrop" id="importBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <h3 id="importTitle">Import Contacts from CSV</h3>
+    <div class="field">
+      <label>Template (recognized columns: Name or First Name/Last Name, Email, Phone, Notes)</label>
+      <textarea id="importTemplateBox" rows="3" readonly style="font-family:monospace">Name,Email,Phone,Notes
+John Smith,john@example.com,555-123-4567,Met at the Q1 conference</textarea>
+      <button class="btn" id="copyImportTemplateBtn" type="button" style="margin-top:8px">Copy Template</button>
+    </div>
+    <div class="field">
+      <label>Paste CSV data (including header row)</label>
+      <textarea id="importCsvText" rows="8" placeholder="Paste your filled-in CSV here…" style="font-family:monospace"></textarea>
+      <input type="file" id="importFileInput" accept=".csv" style="display:none" />
+      <button class="btn" id="loadImportFileBtn" type="button" style="margin-top:8px">Load from File…</button>
+    </div>
+    <div class="field">
+      <label>Preview</label>
+      <div id="importPreviewList" class="list" style="max-height:30vh;overflow:auto"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="previewImportBtn" type="button">Preview</button>
+      <button class="btn accent" id="confirmImportBtn" type="button" disabled>Import</button>
+      <button class="btn" id="closeImportBtn" type="button">Close</button>
     </div>
   </div>
 </div>
@@ -405,7 +435,7 @@
   </div>
 </div>
 
-<div class="hint" id="hint">v14.0.0: Rotting contact colors • Task-based touches (T) • Folder-backed persistence • Launch centered on root</div>
+<div class="hint" id="hint">v14.1.0: CSV Import • Daily contact frequency • Smoother dragging • Background color fixes</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>

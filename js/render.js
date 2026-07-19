@@ -77,12 +77,7 @@ window.Render = (function() {
     clearLayers();
     updateStats();
 
-    var visible = new Set();
-    (function walk(n) {
-      visible.add(n.id);
-      if(n.collapsed) return;
-      n.children.forEach(walk);
-    })(state.map);
+    var visible = nodeOps.getVisibleIds();
 
     var cardMap = new Map();
 
@@ -113,6 +108,7 @@ window.Render = (function() {
       }
       if(n.bgColor) {
         card.style.backgroundColor = n.bgColor;
+        card.style.backgroundImage = 'none'; // suppress .task-done's gradient image so custom bg always wins
       }
 
       var typeChip = '<span class="chip"><span class="swatch" style="background:' + (config.TemplateChipColors[n.template] || '#6b7280') + '"></span>' + utils.esc(n.template) + '</span>';

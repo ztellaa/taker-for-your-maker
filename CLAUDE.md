@@ -25,7 +25,7 @@ The application uses vanilla JavaScript with modules loaded via script tags in a
 11. **analytics.js** - Weekly business development tracking
 12. **touch-tracker.js** - Generic toast notification helper (name predates the Touch template removal in v14)
 13. **editor.js** - Node editing modal and field management
-14. **modals.js** - Backup, mailing list, and backup-reminder modals
+14. **modals.js** - Backup, mailing list, CSV import, and backup-reminder modals
 15. **events.js** - All event handlers (drag-and-drop, zoom, keyboard shortcuts, etc.)
 16. **search-advanced.js** - Advanced search with field-specific queries
 17. **main.js** - Initialization and orchestration
@@ -44,7 +44,7 @@ Nodes are tree-structured objects with this shape:
   due: string,          // ISO date (YYYY-MM-DD)
   notes: string,
   fields: object,       // Template-specific fields
-  freq: string,         // 'monthly', 'quarterly', 'biannually', 'annually'
+  freq: string,         // 'daily', 'monthly', 'quarterly', 'biannually', 'annually' (Contact defaults to 'daily')
   highlight: boolean,   // User flag for important nodes
   proxyHighlight: boolean, // Computed: collapsed node with highlighted descendants
   collapsed: boolean,
@@ -59,7 +59,11 @@ Nodes are tree-structured objects with this shape:
 
 ### Contact Creation
 
-Creating a Contact node no longer auto-scaffolds any child container (the automatic "Tasks" Sub-Tree was removed in v14). New Contacts are created bare; Tasks are added directly under them via `C`/`+Child` or the `T` hotkey.
+Creating a Contact node no longer auto-scaffolds any child container (the automatic "Tasks" Sub-Tree was removed in v14). New Contacts are created bare; Tasks are added directly under them via `C`/`+Child` or the `T` hotkey. New Contacts default to `freq: 'daily'` and `fields['Last Contact']` set to today (`node-operations.js:newNode()`) so they start "fresh"/green under rotting instead of immediately showing as most-rotten for having no contact on record. This applies uniformly to Contacts created via `P`, `+Child`, and CSV import (below), since all three go through `newNode()`.
+
+### CSV Import
+
+The **Import** toolbar button opens a modal (`js/modals.js`, `#importBackdrop` in `index.html`) for bulk-creating Contacts from pasted or uploaded CSV data. Column headers are matched case-insensitively and don't need to be in a fixed order: a `Name` column is split on the first space into First/Last Name; otherwise separate `First Name`/`Last Name` columns are used. `Email`, `Phone` (or `Cell`/`Cell Number`/`Phone Number`), and `Notes`/`Note` are also recognized; unrecognized columns are ignored. The modal shows a copyable example template and a preview before import. Each import run creates one new "CSV Import `<date>`" Sub-Tree under the currently selected node (or root if nothing is selected), and all imported Contacts are added under that Sub-Tree - keeping each batch visually grouped rather than dumped loose into the parent. Contacts get the same Daily/Last-Contact-today defaults as any other new Contact, since they're all created via `nodeOps.newNode()`.
 
 ### Template System
 
@@ -184,7 +188,7 @@ python -m http.server 8000
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
 - Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`
-- Current version: 14.0.0
+- Current version: 14.1.0
 
 ## Date Formatting
 

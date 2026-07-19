@@ -90,6 +90,19 @@ window.Events = (function() {
     }
   }
 
+  // Apply (or clear) the mindmap canvas background color. Top-level (not
+  // inside initButtonHandlers) so it's available to storage.js:restore(),
+  // which runs before initButtonHandlers() during app init.
+  function applyMapBackground(color) {
+    var el = dom.stageWrap;
+    if(color) {
+      el.style.cssText = 'background-color: ' + color + ' !important; background-image: none !important;';
+    } else {
+      el.style.cssText = '';
+    }
+    state.mapBgColor = color;
+  }
+
   /**
    * Zoom toward a specific screen point (or tracked mouse position, or viewport center)
    *
@@ -295,11 +308,14 @@ window.Events = (function() {
       return dist < centerThreshold;
     }
 
-    // Find all other node positions
+    // Find all other CURRENTLY VISIBLE node positions - nodes hidden behind
+    // a collapsed ancestor must not participate in overlap avoidance or
+    // reparent-target detection, or dragging appears to snag on "nothing".
     function getOtherNodePositions(excludeId) {
       var positions = [];
+      var visible = nodeOps.getVisibleIds();
       nodeOps.bfs(state.map, function(n) {
-        if(n.id !== excludeId && n.pos) {
+        if(n.id !== excludeId && n.pos && visible.has(n.id)) {
           positions.push({id: n.id, pos: n.pos});
         }
       });
@@ -401,8 +417,6 @@ window.Events = (function() {
       window.Render.drawLinks(new Map(utils.$$('.node', dom.nodeLayer).map(function(el){
         return [el.dataset.id, el];
       })), new Set());
-
-      window.Storage.markDirty();
     });
 
     dom.nodeLayer.addEventListener('pointerup', function(e) {
@@ -615,88 +629,35 @@ window.Events = (function() {
       window.Render.renderMindMap();
     };
 
-    // Background color picker - works for mindmap background (no selection) or card background (with selection)
+    // Mindmap background color picker. Per-card background is set separately,
+    // via the node editor's own Background Color palette (editor.js) - this
+    // toolbar button always targets the map/viewport, unambiguously.
     var currentBgColor = null;
     var originalBgColor = null; // Store original for cancel/revert
-    var bgColorTarget = null; // 'map' or 'card'
-    var bgColorNodeId = null; // Store node ID for card target
     var liveUpdateTimer = null; // Debounce timer
 
     function updateBgColorPreview(color) {
-      if(color) {
-        dom.bgColorPreview.style.backgroundColor = color;
-      } else {
-        dom.bgColorPreview.style.backgroundColor = bgColorTarget === 'map' ? '#f7f0db' : 'var(--panel)';
-      }
-    }
-
-    function applyMapBackground(color) {
-      var el = dom.stageWrap;
-      if(color) {
-        el.style.cssText = 'background-color: ' + color + ' !important; background-image: none !important;';
-      } else {
-        el.style.cssText = '';
-      }
-      state.mapBgColor = color;
+      dom.bgColorPreview.style.backgroundColor = color || '#f7f0db';
     }
 
     // Apply color live (debounced for performance)
     function applyLiveColorDebounced(color) {
       if(liveUpdateTimer) clearTimeout(liveUpdateTimer);
       liveUpdateTimer = setTimeout(function() {
-        if(bgColorTarget === 'map') {
-          var el = dom.stageWrap;
-          if(color) {
-            el.style.cssText = 'background-color: ' + color + ' !important; background-image: none !important;';
-          } else {
-            el.style.cssText = '';
-          }
-        } else if(bgColorNodeId) {
-          var node = nodeOps.findNode(bgColorNodeId).node;
-          if(node) {
-            node.bgColor = color;
-            window.Render.renderMindMap();
-          }
-        }
+        applyMapBackground(color);
       }, 150); // 150ms debounce
     }
 
     // Revert to original color (on cancel)
     function revertColor() {
       if(liveUpdateTimer) clearTimeout(liveUpdateTimer);
-      if(bgColorTarget === 'map') {
-        var el = dom.stageWrap;
-        if(originalBgColor) {
-          el.style.cssText = 'background-color: ' + originalBgColor + ' !important; background-image: none !important;';
-        } else {
-          el.style.cssText = '';
-        }
-      } else if(bgColorNodeId) {
-        var node = nodeOps.findNode(bgColorNodeId).node;
-        if(node) {
-          node.bgColor = originalBgColor;
-          window.Render.renderMindMap();
-        }
-      }
+      applyMapBackground(originalBgColor);
     }
 
     dom.bgColorBtn.onclick = function() {
-      // Determine target: map background if no selection, card background if selection
-      if(state.selectedId) {
-        var node = nodeOps.findNode(state.selectedId).node;
-        if(!node) return;
-        bgColorTarget = 'card';
-        bgColorNodeId = state.selectedId;
-        currentBgColor = node.bgColor || '#003168';
-        originalBgColor = node.bgColor || null;
-        utils.$('#bgColorTitle').textContent = 'Card Background Color';
-      } else {
-        bgColorTarget = 'map';
-        bgColorNodeId = null;
-        currentBgColor = state.mapBgColor || '#f7f0db';
-        originalBgColor = state.mapBgColor || null;
-        utils.$('#bgColorTitle').textContent = 'Mindmap Background Color';
-      }
+      currentBgColor = state.mapBgColor || '#f7f0db';
+      originalBgColor = state.mapBgColor || null;
+      utils.$('#bgColorTitle').textContent = 'Mindmap Background Color';
 
       dom.bgColorPicker.value = currentBgColor || '#f7f0db';
       dom.bgColorHex.value = currentBgColor || '';
@@ -738,20 +699,7 @@ window.Events = (function() {
 
     dom.applyBgColorBtn.onclick = function() {
       if(liveUpdateTimer) clearTimeout(liveUpdateTimer);
-
-      // Apply final color
-      if(bgColorTarget === 'map') {
-        var el = dom.stageWrap;
-        if(currentBgColor) {
-          el.style.cssText = 'background-color: ' + currentBgColor + ' !important; background-image: none !important;';
-        } else {
-          el.style.cssText = '';
-        }
-        state.mapBgColor = currentBgColor;
-      } else if(bgColorNodeId) {
-        var node = nodeOps.findNode(bgColorNodeId).node;
-        if(node) node.bgColor = currentBgColor;
-      }
+      applyMapBackground(currentBgColor);
 
       dom.bgColorBackdrop.style.display = 'none';
       dom.bgColorBackdrop.setAttribute('aria-hidden', 'true');
@@ -769,8 +717,6 @@ window.Events = (function() {
       }
     };
 
-    // Expose applyMapBackground for use after loading saved state
-    window.Events.applyMapBackground = applyMapBackground;
   }
 
   function initNodeClickHandlers() {
@@ -1052,6 +998,7 @@ window.Events = (function() {
     switchToList: switchToList,
     stageTransform: stageTransform,
     centerOnNode: centerOnNode,
+    applyMapBackground: applyMapBackground,
     applyZoom: applyZoom,
     initWheelZoom: initWheelZoom,
     initPanning: initPanning,
