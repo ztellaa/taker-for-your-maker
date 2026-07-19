@@ -612,48 +612,6 @@
     transform: translateY(0);
   }
 
-  /* Version 13: Touch modal styles */
-  .touch-options {
-    display: grid;
-    gap: 12px;
-    margin: 16px 0;
-  }
-
-  .touch-option {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .touch-option:hover {
-    background: var(--panel-2);
-    border-color: var(--rbc-light-blue);
-  }
-
-  .touch-option input[type="radio"] {
-    accent-color: var(--rbc-light-blue);
-  }
-
-  .touch-label {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .touch-label strong {
-    color: var(--text);
-    font-weight: 600;
-  }
-
-  .touch-label small {
-    color: var(--muted);
-    font-size: 12px;
-  }
-
   /* Version 13: Search container */
   .search-container {
     display: flex;
@@ -931,50 +889,6 @@
     border-color: #4CAF50 !important;
   }
 
-  /* Touch card status styling */
-  /* Not Completed - Red */
-  .node.touch-not-completed {
-    background: linear-gradient(135deg, #3d1a1a, #2d0f0f) !important;
-    border-color: #5a2d2d !important;
-  }
-
-  .node.touch-not-completed:hover {
-    border-color: #ef4444 !important;
-  }
-
-  /* Attempted - Yellow/Orange */
-  .node.touch-attempted {
-    background: linear-gradient(135deg, #3d3a1a, #2d2a0f) !important;
-    border-color: #5a5a2d !important;
-  }
-
-  .node.touch-attempted:hover {
-    border-color: #f59e0b !important;
-  }
-
-  /* Completed - Green */
-  .node.touch-completed {
-    background: linear-gradient(135deg, #1a3d1a, #0f2d0f) !important;
-    border-color: #2d5a2d !important;
-  }
-
-  .node.touch-completed:hover {
-    border-color: #4CAF50 !important;
-  }
-
-  /* Touch card notes preview */
-  .touch-notes-preview {
-    font-size: 13px;
-    color: var(--muted);
-    margin-top: 4px;
-    line-height: 1.4;
-  }
-
-  /* Hide non-essential buttons on Touch cards - only show Flag and Edit */
-  .node[data-template="Touch"] .actions .btn:not([data-act="hl"]):not([data-act="edit"]) {
-    display: none;
-  }
-
   /* Disabled channel radio buttons */
   .touch-check:has(input:disabled) {
     opacity: 0.5;
@@ -984,19 +898,6 @@
   .touch-check:has(input:disabled):hover {
     border-color: var(--border);
     background: transparent;
-  }
-
-  /* Touch aggregated notes in Task cards */
-  .task-touch-notes {
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px dashed var(--border);
-  }
-
-  .task-touch-notes div {
-    margin: 2px 0;
   }
 
   /* v13.0.6: Meta card styles */

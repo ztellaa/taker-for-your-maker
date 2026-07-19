@@ -36,6 +36,12 @@ window.DOM = (function() {
     saveBtn: $('#saveBtn'),
     loadBtn: $('#loadBtn'),
     fileInput: $('#fileInput'),
+    crmFolderBtn: $('#crmFolderBtn'),
+    restoreFromFolderBtn: $('#restoreFromFolderBtn'),
+
+    // Backup reminder modal
+    backupReminderBackdrop: $('#backupReminderBackdrop'),
+    dismissBackupReminderBtn: $('#dismissBackupReminder'),
 
     // List view
     listView: $('#listView'),
@@ -63,14 +69,10 @@ window.DOM = (function() {
     bgColorPalette: $('#bgColorPalette'),
     importAccountsBtn: $('#importAccounts'),
 
-    // Touch template fields
-    f_touchType: $('#f_touchType'),
-    f_touchStatus: $('#f_touchStatus'),
-    touchTypeField: $('#touchTypeField'),
-    touchStatusField: $('#touchStatusField'),
+    // Task Channel field
     availableDetailsField: $('#availableDetailsField'),
 
-    // Task touch radio buttons
+    // Task Channel radio buttons
     touch_calls: $('#touch_calls'),
     touch_linkedin: $('#touch_linkedin'),
     touch_emails: $('#touch_emails'),
@@ -109,11 +111,6 @@ window.DOM = (function() {
     clearBgColorBtn: $('#clearBgColor'),
     cancelBgColorBtn: $('#cancelBgColor'),
     applyBgColorBtn: $('#applyBgColor'),
-
-    // Touch modal
-    touchBackdrop: $('#touchBackdrop'),
-    cancelTouchBtn: $('#cancelTouch'),
-    confirmTouchBtn: $('#confirmTouch'),
 
     // Stats
     statContacts: $('#statContacts'),

@@ -6,18 +6,22 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '13.0.7';
+  var CURRENT_VERSION = '14.0.0';
 
   function markDirty() {
     state.lastDirty = Date.now();
+    var payload = {
+      version: CURRENT_VERSION,
+      createdAt: Date.now(),
+      map: state.map,
+      mapBgColor: state.mapBgColor
+    };
     try {
-      localStorage.setItem('wm.mindmap', JSON.stringify({
-        version: CURRENT_VERSION,
-        createdAt: Date.now(),
-        map: state.map,
-        mapBgColor: state.mapBgColor
-      }));
+      localStorage.setItem('wm.mindmap', JSON.stringify(payload));
     } catch(e) {}
+    if(window.FilePersistence) {
+      window.FilePersistence.scheduleWrite(payload);
+    }
   }
 
   function sanitize(s) {
@@ -55,7 +59,6 @@ window.Storage = (function() {
     state.selectedId = state.map.id;
     state.mapBgColor = data.mapBgColor || null;
     nodeOps.ensurePositions();
-    nodeOps.ensureScaffolding();
     // Apply saved map background color
     if(window.Events && window.Events.applyMapBackground) {
       window.Events.applyMapBackground(state.mapBgColor);
@@ -195,6 +198,24 @@ window.Storage = (function() {
       });
     }
 
+    // Version 14.0.0 migration: Touch template removed - convert to completed/todo Task
+    if (versionNum < 14) {
+      var channelByTouchType = {Call: 'calls', LinkedIn: 'linkedin', Email: 'emails'};
+      nodeOps.bfs(m, function(n) {
+        if (n.template === 'Touch') {
+          var touchType = (n.fields && n.fields['Touch Type']) || '';
+          var wasCompleted = n.fields && n.fields['Status'] === 'Completed';
+          n.template = 'Task';
+          n.status = wasCompleted ? 'done' : 'todo';
+          n.fields = n.fields || {};
+          n.fields['Channel'] = channelByTouchType[touchType] || '';
+          delete n.fields['Touch Type'];
+          delete n.fields['Status'];
+          n.color = config.TemplateDefaultsColor['Task'];
+        }
+      });
+    }
+
     // Update status and template defaults for all nodes
     nodeOps.bfs(m, function(n,p) {
       // Set default status based on template
@@ -203,11 +224,6 @@ window.Storage = (function() {
           n.status = 'todo';
         } else if (n.template === 'Contact') {
           n.status = 'A-tier';
-        } else if (n.template === 'Touch') {
-          n.status = '';
-          if (!n.fields['Status']) {
-            n.fields['Status'] = 'Not Completed';
-          }
         } else {
           n.status = '';
         }
@@ -222,6 +238,10 @@ window.Storage = (function() {
       if (!n.color) {
         n.color = nodeOps.defaultColorForTemplate(n.template);
       }
+
+      // Backfill v14 node flags
+      if (n.colorIsCustom == null) n.colorIsCustom = false;
+      if (n.analyticsLogged == null) n.analyticsLogged = false;
 
       // Contact-specific field initialization
       if (n.template === 'Contact') {
@@ -246,10 +266,9 @@ window.Storage = (function() {
         delete n.fields['Activity Offset'];
       }
 
-      // Touch-specific field initialization
-      if (n.template === 'Touch') {
-        n.fields['Touch Type'] = n.fields['Touch Type'] || '';
-        n.fields['Status'] = n.fields['Status'] || 'Not Completed';
+      // Task-specific field initialization
+      if (n.template === 'Task') {
+        n.fields['Channel'] = n.fields['Channel'] || '';
       }
     });
 
@@ -266,7 +285,6 @@ window.Storage = (function() {
           state.map = m.map;
           state.selectedId = state.map.id;
           nodeOps.ensurePositions();
-          nodeOps.ensureScaffolding();
           window.Render.renderMindMap();
           window.Render.buildList();
           return true;

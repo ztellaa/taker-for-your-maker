@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>RBC Wealth Map – v13.0.7</title>
+<title>RBC Wealth Map – v14.0.0</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -19,7 +19,6 @@
       <button class="btn primary" id="addRoot" type="button">New Map</button>
       <select id="templateSelect" title="Template">
         <option value="Task" selected>Task</option>
-        <option value="Touch">Touch</option>
         <option value="Note">Note</option>
         <option value="Contact">Contact</option>
         <option value="Account">Account</option>
@@ -57,6 +56,7 @@
       <button class="btn accent" id="saveBtn" type="button">Save</button>
       <button class="btn" id="loadBtn" type="button">Load</button>
       <button class="btn" id="backupsBtn" type="button">Backups</button>
+      <button class="btn" id="crmFolderBtn" type="button">CRM Folder</button>
       <input type="file" id="fileInput" accept="application/json" style="display:none" />
     </div>
   </div>
@@ -196,25 +196,8 @@
         <option value="biannually">Bi-Annually</option>
         <option value="annually">Annually</option>
       </select></div>
-      <div class="field" id="touchTypeField" style="display:none">
-        <label for="f_touchType">Touch Type</label>
-        <select id="f_touchType">
-          <option value="">-- Select Type --</option>
-          <option value="Call">Call</option>
-          <option value="LinkedIn">LinkedIn</option>
-          <option value="Email">Email</option>
-        </select>
-      </div>
-      <div class="field" id="touchStatusField" style="display:none">
-        <label for="f_touchStatus">Touch Status</label>
-        <select id="f_touchStatus">
-          <option value="Not Completed">Not Completed</option>
-          <option value="Attempted">Attempted</option>
-          <option value="Completed">Completed</option>
-        </select>
-      </div>
       <div class="field" id="availableDetailsField" style="grid-column:1 / -1;display:none">
-        <label>Available Details</label>
+        <label>Channel</label>
         <div class="touch-checkboxes">
           <label class="touch-check"><input type="radio" name="taskTouchType" id="touch_calls" value="calls" /><span>📞 Call</span></label>
           <label class="touch-check"><input type="radio" name="taskTouchType" id="touch_linkedin" value="linkedin" /><span>💼 LinkedIn</span></label>
@@ -241,12 +224,24 @@
   </div>
 </div>
 
+<!-- Backup Reminder Modal -->
+<div class="modal-backdrop" id="backupReminderBackdrop" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="backupReminderTitle">
+    <h3 id="backupReminderTitle">Back Up Your CRM Folder</h3>
+    <p style="color: var(--muted); margin-bottom: 16px;">It's been a week since your last reminder. Copy your CRM folder somewhere safe (e.g. OneDrive, a USB drive) in case local storage gets wiped again.</p>
+    <div class="actions">
+      <button class="btn accent" id="dismissBackupReminder" type="button">Remind me in a week</button>
+    </div>
+  </div>
+</div>
+
 <!-- Backups Modal -->
 <div class="modal-backdrop" id="backupsBackdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backupsTitle">
     <h3 id="backupsTitle">Backups</h3>
     <div id="backupsList" class="list" style="max-height:50vh;overflow:auto"></div>
     <div class="actions">
+      <button class="btn" id="restoreFromFolderBtn" type="button">Restore from CRM Folder</button>
       <button class="btn" id="closeBackups" type="button">Close</button>
     </div>
   </div>
@@ -319,32 +314,6 @@
   </div>
 </div>
 
-<!-- Touch Modal -->
-<div class="modal-backdrop" id="touchBackdrop" aria-hidden="true">
-  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="touchTitle">
-    <h3 id="touchTitle">Record Touch</h3>
-    <p style="color: var(--muted); margin-bottom: 16px;">Select the contact method used:</p>
-    <div class="touch-checkboxes" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-      <label class="touch-check" style="padding: 12px; cursor: pointer;">
-        <input type="radio" name="touchType" value="calls" id="touchModal_calls" />
-        <span>📞 Call</span>
-      </label>
-      <label class="touch-check" style="padding: 12px; cursor: pointer;">
-        <input type="radio" name="touchType" value="linkedin" id="touchModal_linkedin" />
-        <span>💼 LinkedIn</span>
-      </label>
-      <label class="touch-check" style="padding: 12px; cursor: pointer;">
-        <input type="radio" name="touchType" value="emails" id="touchModal_emails" />
-        <span>📧 Email</span>
-      </label>
-    </div>
-    <div class="actions">
-      <button class="btn" id="cancelTouch" type="button">Cancel</button>
-      <button class="btn accent" id="confirmTouch" type="button">Record Touch</button>
-    </div>
-  </div>
-</div>
-
 <!-- Keyboard Shortcuts Modal -->
 <div class="modal-backdrop" id="shortcutsBackdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
@@ -385,7 +354,7 @@
         </div>
         <div class="shortcut-item">
           <kbd>T</kbd>
-          <span>Add Touch to Task</span>
+          <span>Log a completed Task (Contact/Sub-Tree)</span>
         </div>
       </div>
       <div class="shortcut-section">
@@ -436,7 +405,7 @@
   </div>
 </div>
 
-<div class="hint" id="hint">v13.0.7: Mindmap background color • Infinite zoom • Contact Frequency sets task offset</div>
+<div class="hint" id="hint">v14.0.0: Rotting contact colors • Task-based touches (T) • Folder-backed persistence • Launch centered on root</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>
@@ -448,6 +417,7 @@
 <script src="js/node-operations.js"></script>
 <script src="js/render.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/file-persistence.js"></script>
 <script src="js/analytics.js"></script>
 <script src="js/touch-tracker.js"></script>
 <script src="js/editor.js"></script>

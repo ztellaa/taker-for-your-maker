@@ -39,6 +39,30 @@ window.Utils = {
     }
   },
 
+  // Decode hex color to an {r,g,b} object
+  hexToRgb: function(hex) {
+    try {
+      var c = hex.replace('#','');
+      if(c.length === 3) {
+        c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+      }
+      var num = parseInt(c,16);
+      return {r:(num>>16)&255, g:(num>>8)&255, b:num&255};
+    } catch(e) {
+      return {r:0,g:0,b:0};
+    }
+  },
+
+  // Linearly interpolate between two hex colors, t clamped to [0,1]
+  lerpColor: function(hexA, hexB, t) {
+    var tt = Math.max(0, Math.min(1, t));
+    var a = this.hexToRgb(hexA), b = this.hexToRgb(hexB);
+    var r = Math.round(a.r + (b.r-a.r)*tt);
+    var g = Math.round(a.g + (b.g-a.g)*tt);
+    var bl = Math.round(a.b + (b.b-a.b)*tt);
+    return '#'+(((1<<24)+(r<<16)+(g<<8)+bl).toString(16).slice(1));
+  },
+
   // Convert hex color to rgba with alpha
   hexToRgba: function(hex, alpha) {
     try {
@@ -144,6 +168,17 @@ window.Utils = {
       return d.toISOString().slice(0,10);
     } catch(e) {
       return ymd;
+    }
+  },
+
+  // Whole days between two ISO (YYYY-MM-DD) dates, b - a
+  daysBetween: function(a, b) {
+    try {
+      var da = new Date(a+'T00:00:00');
+      var db = new Date(b+'T00:00:00');
+      return Math.round((db-da)/86400000);
+    } catch(e) {
+      return 0;
     }
   },
 
