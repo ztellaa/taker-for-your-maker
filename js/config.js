@@ -45,8 +45,34 @@ window.AppConfig = {
         'Next Contact':'',
         'Next Meeting':'',
         'Salesforce':'',
-        'Activity Offset':'',  // Days until next contact (uses global default if empty)
         'Tags':''
+      },
+      // Custom display - title from name, show only Email/LinkedIn/Cell
+      show: function(n) {
+        var firstName = (n.fields && n.fields['First Name']) || '';
+        var lastName = (n.fields && n.fields['Last Name']) || '';
+        var displayTitle = (firstName + ' ' + lastName).trim() || n.title || 'Contact';
+
+        var contactInfo = [];
+        var email = (n.fields && n.fields['Email']) || '';
+        var cellNumber = (n.fields && n.fields['Cell Number']) || '';
+        var linkedIn = (n.fields && n.fields['LinkedIn']) || '';
+
+        // Email as mailto link (opens in new tab/window)
+        if(email) {
+          contactInfo.push('<a href="mailto:' + window.Utils.esc(email) + '" target="_blank" rel="noopener" style="color:#0073cc;text-decoration:none">📧 ' + window.Utils.esc(email) + '</a>');
+        }
+        if(cellNumber) contactInfo.push('<span>📞 ' + window.Utils.esc(cellNumber) + '</span>');
+        if(linkedIn && /^https?:\/\//i.test(linkedIn)) {
+          contactInfo.push('<a href="' + window.Utils.esc(linkedIn) + '" target="_blank" rel="noopener" style="color:#0073cc;text-decoration:none">💼 LinkedIn</a>');
+        } else if(linkedIn) {
+          contactInfo.push('<span>💼 ' + window.Utils.esc(linkedIn) + '</span>');
+        }
+
+        var contactHtml = contactInfo.length ?
+          '<div style="margin-top:6px;font-size:13px;color:#d2d7e2;display:flex;flex-direction:column;gap:2px">' + contactInfo.join('') + '</div>' : '';
+
+        return '<strong>' + window.Utils.esc(displayTitle) + '</strong>' + contactHtml;
       }
     },
     'Account': {

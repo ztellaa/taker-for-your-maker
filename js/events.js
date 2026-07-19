@@ -61,21 +61,65 @@ window.Events = (function() {
     utils.$('#analytics-week-label').textContent = weekKey.replace('bd_week_', '');
   }
 
+  // Track last known mouse position for dynamic zoom
+  var lastMouseX = null;
+  var lastMouseY = null;
+
   // Transform & zoom
   function stageTransform() {
     dom.stage.style.transform = 'translate('+state.tx+'px, '+state.ty+'px) scale('+state.zoom+')';
     utils.$('#zoomReset').textContent = Math.round(state.zoom*100)+'%';
   }
 
-  function applyZoom(mult) {
-    var rect = dom.stage.getBoundingClientRect();
-    var cx = rect.width/2, cy = rect.height/2;
-    var px = (cx-rect.left-state.tx)/state.zoom;
-    var py = (cy-rect.top-state.ty)/state.zoom;
-    var newZoom = utils.clamp(state.zoom*mult, 0.3, 4);
-    state.tx = cx - px*newZoom - rect.left;
-    state.ty = cy - py*newZoom - rect.top;
+  /**
+   * Zoom toward a specific screen point (or tracked mouse position, or viewport center)
+   *
+   * Math explanation:
+   * - Container (stageWrap) has origin at its top-left corner
+   * - Stage is transformed with: translate(tx, ty) scale(zoom)
+   * - World coords are the untransformed stage coordinates
+   * - Screen coords are client coordinates relative to the viewport
+   *
+   * Screen to World: worldX = (screenX - containerLeft - tx) / zoom
+   * World to Screen: screenX = worldX * zoom + tx + containerLeft
+   *
+   * To zoom toward a point, we want the world point under the cursor to stay
+   * at the same screen position after the zoom change.
+   */
+  function applyZoom(mult, clientX, clientY) {
+    // Get container rect - this is our stable reference point
+    var containerRect = dom.stageWrap.getBoundingClientRect();
+
+    // Determine the zoom focus point (screen coordinates)
+    var screenX, screenY;
+    if(clientX !== undefined && clientY !== undefined) {
+      // Explicit position provided
+      screenX = clientX;
+      screenY = clientY;
+    } else if(lastMouseX !== null && lastMouseY !== null) {
+      // Use tracked mouse position
+      screenX = lastMouseX;
+      screenY = lastMouseY;
+    } else {
+      // Fall back to viewport center
+      screenX = containerRect.left + containerRect.width / 2;
+      screenY = containerRect.top + containerRect.height / 2;
+    }
+
+    // Convert screen point to world coordinates (before zoom)
+    var worldX = (screenX - containerRect.left - state.tx) / state.zoom;
+    var worldY = (screenY - containerRect.top - state.ty) / state.zoom;
+
+    // Calculate new zoom level
+    var newZoom = utils.clamp(state.zoom * mult, 0.01, 4);
+
+    // Calculate new translation to keep the world point at the same screen position
+    // Rearranging: screenX = worldX * newZoom + newTx + containerLeft
+    // So: newTx = screenX - worldX * newZoom - containerLeft
+    state.tx = screenX - worldX * newZoom - containerRect.left;
+    state.ty = screenY - worldY * newZoom - containerRect.top;
     state.zoom = newZoom;
+
     stageTransform();
   }
 
@@ -126,21 +170,40 @@ window.Events = (function() {
   function initWheelZoom() {
     dom.stageWrap.addEventListener('wheel', function(e) {
       e.preventDefault();
-      var rect = dom.stage.getBoundingClientRect();
-      var worldX = (e.clientX-rect.left-state.tx)/state.zoom;
-      var worldY = (e.clientY-rect.top-state.ty)/state.zoom;
-      var base = (e.deltaMode===1 ? 15 : (e.deltaMode===2 ? 360 : 1));
+
+      // Use container rect for consistent coordinate system
+      var containerRect = dom.stageWrap.getBoundingClientRect();
+
+      // Update tracked mouse position
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+
+      // Convert screen point to world coordinates
+      var worldX = (e.clientX - containerRect.left - state.tx) / state.zoom;
+      var worldY = (e.clientY - containerRect.top - state.ty) / state.zoom;
+
+      // Calculate zoom factor from wheel delta
+      var base = (e.deltaMode === 1 ? 15 : (e.deltaMode === 2 ? 360 : 1));
       var delta = e.deltaY * base;
       var factor = Math.pow(1.0012, -delta);
-      var newZoom = utils.clamp(state.zoom*factor, 0.3, 4);
-      state.tx = e.clientX - worldX*newZoom - rect.left;
-      state.ty = e.clientY - worldY*newZoom - rect.top;
+      var newZoom = utils.clamp(state.zoom * factor, 0.01, 4);
+
+      // Calculate new translation to keep world point at same screen position
+      state.tx = e.clientX - worldX * newZoom - containerRect.left;
+      state.ty = e.clientY - worldY * newZoom - containerRect.top;
       state.zoom = newZoom;
+
       stageTransform();
     }, {passive:false});
   }
 
   function initPanning() {
+    // Track mouse position for dynamic zoom
+    dom.stageWrap.addEventListener('mousemove', function(e) {
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+    });
+
     dom.stageWrap.addEventListener('pointerdown', function(e) {
       if(e.button!==0) return;
       if(e.target.closest('.node')) return;
@@ -224,17 +287,24 @@ window.Events = (function() {
       return positions;
     }
 
-    // Adjust position to avoid overlap (unless near center)
+    // Adjust position to avoid overlap (unless near center, except for parent)
     function adjustForOverlap(newPos, dragId) {
       var others = getOtherNodePositions(dragId);
       var adjusted = {x: newPos.x, y: newPos.y};
       var padding = 10;
 
+      // Get parent ID to enforce no overlap with parent
+      var found = nodeOps.findNode(dragId);
+      var parentId = found && found.parent ? found.parent.id : null;
+
       for(var i = 0; i < others.length; i++) {
         var other = others[i];
         if(nodesOverlap(adjusted, other.pos)) {
-          // Allow overlap if near center (for reparenting)
-          if(isNearCenter(adjusted, other.pos)) {
+          // Never allow overlap with parent - always push away
+          var isParent = (other.id === parentId);
+
+          // Allow overlap if near center (for reparenting) - except with parent
+          if(!isParent && isNearCenter(adjusted, other.pos)) {
             return adjusted;
           }
           // Push away from the overlapping node
@@ -296,7 +366,7 @@ window.Events = (function() {
         card.style.top = node.pos.y + 'px';
       }
 
-      // Highlight potential drop target
+      // Highlight potential drop target (for node reparenting)
       var path = document.elementsFromPoint(e.clientX, e.clientY);
       var allNodes = dom.nodeLayer.querySelectorAll('.node');
       allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
@@ -319,7 +389,9 @@ window.Events = (function() {
     dom.nodeLayer.addEventListener('pointerup', function(e) {
       if(!state.drag) return;
       var card = dom.nodeLayer.querySelector('.node[data-id="'+state.drag.id+'"]');
-      if(card) card.classList.remove('dragging');
+      if(card) {
+        card.classList.remove('dragging');
+      }
 
       // Remove drop-target class from all nodes
       var allNodes = dom.nodeLayer.querySelectorAll('.node');
@@ -333,9 +405,10 @@ window.Events = (function() {
         dragDistance = Math.sqrt(dx*dx + dy*dy);
       }
 
+      var draggedNode = nodeOps.findNode(state.drag.id).node;
+
       // Only reparent if dragged more than 25 pixels AND dropped near center of another node
       if(dragDistance > 25) {
-        var draggedNode = nodeOps.findNode(state.drag.id).node;
         var others = getOtherNodePositions(state.drag.id);
         var targetNode = null;
 
@@ -522,6 +595,163 @@ window.Events = (function() {
       window.Storage.markDirty();
       window.Render.renderMindMap();
     };
+
+    // Background color picker - works for mindmap background (no selection) or card background (with selection)
+    var currentBgColor = null;
+    var originalBgColor = null; // Store original for cancel/revert
+    var bgColorTarget = null; // 'map' or 'card'
+    var bgColorNodeId = null; // Store node ID for card target
+    var liveUpdateTimer = null; // Debounce timer
+
+    function updateBgColorPreview(color) {
+      if(color) {
+        dom.bgColorPreview.style.backgroundColor = color;
+      } else {
+        dom.bgColorPreview.style.backgroundColor = bgColorTarget === 'map' ? '#f7f0db' : 'var(--panel)';
+      }
+    }
+
+    function applyMapBackground(color) {
+      var el = dom.stageWrap;
+      if(color) {
+        el.style.cssText = 'background-color: ' + color + ' !important; background-image: none !important;';
+      } else {
+        el.style.cssText = '';
+      }
+      state.mapBgColor = color;
+    }
+
+    // Apply color live (debounced for performance)
+    function applyLiveColorDebounced(color) {
+      if(liveUpdateTimer) clearTimeout(liveUpdateTimer);
+      liveUpdateTimer = setTimeout(function() {
+        if(bgColorTarget === 'map') {
+          var el = dom.stageWrap;
+          if(color) {
+            el.style.cssText = 'background-color: ' + color + ' !important; background-image: none !important;';
+          } else {
+            el.style.cssText = '';
+          }
+        } else if(bgColorNodeId) {
+          var node = nodeOps.findNode(bgColorNodeId).node;
+          if(node) {
+            node.bgColor = color;
+            window.Render.renderMindMap();
+          }
+        }
+      }, 150); // 150ms debounce
+    }
+
+    // Revert to original color (on cancel)
+    function revertColor() {
+      if(liveUpdateTimer) clearTimeout(liveUpdateTimer);
+      if(bgColorTarget === 'map') {
+        var el = dom.stageWrap;
+        if(originalBgColor) {
+          el.style.cssText = 'background-color: ' + originalBgColor + ' !important; background-image: none !important;';
+        } else {
+          el.style.cssText = '';
+        }
+      } else if(bgColorNodeId) {
+        var node = nodeOps.findNode(bgColorNodeId).node;
+        if(node) {
+          node.bgColor = originalBgColor;
+          window.Render.renderMindMap();
+        }
+      }
+    }
+
+    dom.bgColorBtn.onclick = function() {
+      // Determine target: map background if no selection, card background if selection
+      if(state.selectedId) {
+        var node = nodeOps.findNode(state.selectedId).node;
+        if(!node) return;
+        bgColorTarget = 'card';
+        bgColorNodeId = state.selectedId;
+        currentBgColor = node.bgColor || '#003168';
+        originalBgColor = node.bgColor || null;
+        utils.$('#bgColorTitle').textContent = 'Card Background Color';
+      } else {
+        bgColorTarget = 'map';
+        bgColorNodeId = null;
+        currentBgColor = state.mapBgColor || '#f7f0db';
+        originalBgColor = state.mapBgColor || null;
+        utils.$('#bgColorTitle').textContent = 'Mindmap Background Color';
+      }
+
+      dom.bgColorPicker.value = currentBgColor || '#f7f0db';
+      dom.bgColorHex.value = currentBgColor || '';
+      updateBgColorPreview(currentBgColor);
+
+      dom.bgColorBackdrop.style.display = 'flex';
+      dom.bgColorBackdrop.setAttribute('aria-hidden', 'false');
+    };
+
+    dom.bgColorPicker.oninput = function() {
+      currentBgColor = this.value;
+      dom.bgColorHex.value = this.value;
+      updateBgColorPreview(currentBgColor);
+      applyLiveColorDebounced(currentBgColor);
+    };
+
+    dom.bgColorHex.oninput = function() {
+      var val = this.value.trim();
+      if(/^#[0-9A-Fa-f]{6}$/.test(val)) {
+        currentBgColor = val;
+        dom.bgColorPicker.value = val;
+        updateBgColorPreview(currentBgColor);
+        applyLiveColorDebounced(currentBgColor);
+      }
+    };
+
+    dom.clearBgColorBtn.onclick = function() {
+      currentBgColor = null;
+      dom.bgColorHex.value = '';
+      updateBgColorPreview(null);
+      applyLiveColorDebounced(null);
+    };
+
+    dom.cancelBgColorBtn.onclick = function() {
+      revertColor();
+      dom.bgColorBackdrop.style.display = 'none';
+      dom.bgColorBackdrop.setAttribute('aria-hidden', 'true');
+    };
+
+    dom.applyBgColorBtn.onclick = function() {
+      if(liveUpdateTimer) clearTimeout(liveUpdateTimer);
+
+      // Apply final color
+      if(bgColorTarget === 'map') {
+        var el = dom.stageWrap;
+        if(currentBgColor) {
+          el.style.cssText = 'background-color: ' + currentBgColor + ' !important; background-image: none !important;';
+        } else {
+          el.style.cssText = '';
+        }
+        state.mapBgColor = currentBgColor;
+      } else if(bgColorNodeId) {
+        var node = nodeOps.findNode(bgColorNodeId).node;
+        if(node) node.bgColor = currentBgColor;
+      }
+
+      dom.bgColorBackdrop.style.display = 'none';
+      dom.bgColorBackdrop.setAttribute('aria-hidden', 'true');
+
+      window.Storage.markDirty();
+      window.Render.renderMindMap();
+    };
+
+    // Close on backdrop click - revert color
+    dom.bgColorBackdrop.onclick = function(e) {
+      if(e.target === dom.bgColorBackdrop) {
+        revertColor();
+        dom.bgColorBackdrop.style.display = 'none';
+        dom.bgColorBackdrop.setAttribute('aria-hidden', 'true');
+      }
+    };
+
+    // Expose applyMapBackground for use after loading saved state
+    window.Events.applyMapBackground = applyMapBackground;
   }
 
   function initNodeClickHandlers() {
@@ -624,7 +854,7 @@ window.Events = (function() {
         var f = nodeOps.findNode(state.selectedId);
         if(!f || !f.node) return;
 
-        // Only allow adding Touch to Task nodes
+        // T on Task creates Touch, T on Sub-tree creates Task
         if(f.node.template === 'Task') {
           // Create a new Touch child node
           var touchNode = nodeOps.newNode('Touch', 'Touch', f.node);
@@ -632,8 +862,15 @@ window.Events = (function() {
           window.Storage.markDirty();
           window.Render.renderMindMap();
           window.Render.selectNode(touchNode.id);
-          // Open editor for the new Touch node
           window.Editor.openEditor(touchNode.id);
+        } else if(f.node.template === 'Sub-Tree') {
+          // Create a new Task child node
+          var taskNode = nodeOps.newNode('New Task', 'Task', f.node);
+          f.node.children.push(taskNode);
+          window.Storage.markDirty();
+          window.Render.renderMindMap();
+          window.Render.selectNode(taskNode.id);
+          window.Editor.openEditor(taskNode.id);
         } else {
           // Shake the node to indicate invalid action
           var nodeEl = document.querySelector('.node[data-id="' + state.selectedId + '"]');

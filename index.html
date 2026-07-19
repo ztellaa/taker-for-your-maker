@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>RBC Wealth Map – v13.0.5</title>
+<title>RBC Wealth Map – v13.0.7</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -25,11 +25,12 @@
         <option value="Account">Account</option>
         <option value="Sub-Tree">Sub-Tree</option>
       </select>
-      <button class="btn" id="addChild" type="button">Add Child</button>
+      <button class="btn" id="addChild" type="button">Add Card</button>
       <label style="display:flex;gap:6px;align-items:center">Activity offset
         <input id="defaultOffset" type="number" min="0" value="7" style="width:60px" />
       </label>
       <button class="btn" id="editNode" type="button">Edit</button>
+      <button class="btn" id="bgColorBtn" type="button" title="Set background color">BG Color</button>
       <button class="btn" id="toggleHighlight" type="button">Flag</button>
       <button class="btn" id="foldBtn" type="button">Fold</button>
       <button class="btn danger" id="deleteNode" type="button">Delete</button>
@@ -195,10 +196,6 @@
         <option value="biannually">Bi-Annually</option>
         <option value="annually">Annually</option>
       </select></div>
-      <div class="field" id="activityOffsetField" style="display:none">
-        <label for="f_activityOffset">Activity Offset (days)</label>
-        <input id="f_activityOffset" type="number" min="1" placeholder="Uses global default" />
-      </div>
       <div class="field" id="touchTypeField" style="display:none">
         <label for="f_touchType">Touch Type</label>
         <select id="f_touchType">
@@ -224,7 +221,8 @@
           <label class="touch-check"><input type="radio" name="taskTouchType" id="touch_emails" value="emails" /><span>📧 Email</span></label>
         </div>
       </div>
-      <div class="field"><label>Node Color</label><div id="colorPalette" class="palette"></div></div>
+      <div class="field"><label>Frame Color</label><div id="colorPalette" class="palette"></div></div>
+      <div class="field"><label>Background Color</label><div id="bgColorPalette" class="palette"></div></div>
       <div class="field" style="grid-column:1 / -1">
         <label for="f_notes">Notes</label>
         <textarea id="f_notes" rows="3" placeholder="Details, next steps, context"></textarea>
@@ -415,7 +413,30 @@
   </div>
 </div>
 
-<div class="hint" id="hint">v13.0.5: Contact consolidation • Touch workflow • Multi-column distribute • Pulsing drop targets</div>
+<!-- Background Color Picker Modal -->
+<div class="modal-backdrop" id="bgColorBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bgColorTitle" style="max-width:320px">
+    <h3 id="bgColorTitle">Card Background Color</h3>
+    <div class="field" style="margin-bottom:16px">
+      <label>Pick a color</label>
+      <div style="display:flex;gap:12px;align-items:center">
+        <input type="color" id="bgColorPicker" value="#003168" style="width:60px;height:40px;border:none;cursor:pointer" />
+        <input type="text" id="bgColorHex" placeholder="#000000" style="flex:1;font-family:monospace" maxlength="7" />
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:16px">
+      <label>Preview</label>
+      <div id="bgColorPreview" style="height:40px;border-radius:8px;border:2px solid var(--border);background:var(--panel)"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="clearBgColor" type="button">Clear Color</button>
+      <button class="btn" id="cancelBgColor" type="button">Cancel</button>
+      <button class="btn accent" id="applyBgColor" type="button">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hint">v13.0.7: Mindmap background color • Infinite zoom • Contact Frequency sets task offset</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>

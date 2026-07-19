@@ -21,5 +21,8 @@ window.AppState = {
   panStart: null,
 
   // Editor state
-  selectedPaletteColor: null
+  selectedPaletteColor: null,
+
+  // Mindmap background color
+  mapBgColor: null
 };

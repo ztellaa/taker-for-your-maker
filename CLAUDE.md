@@ -65,7 +65,7 @@ This scaffolding logic lives in `node-operations.js:newNode()`.
 Templates define the data fields for each node type and optional custom display functions. See `config.js:Templates` for the full configuration.
 
 Key templates:
-- **Contact** - Unified relationship records (combines former Client/COI/Opportunity) with AUM tracking, contact schedules, Activity Offset
+- **Contact** - Unified relationship records (combines former Client/COI/Opportunity) with AUM tracking, contact schedules, Contact Frequency
 - **Account** - Financial accounts (RRSP, TFSA, etc.)
 - **Task** - Time-bound action items with status tracking
 - **Touch** - Individual contact attempts (Call, LinkedIn, Email) with status (Not Completed, Attempted, Completed)
@@ -82,7 +82,7 @@ The Touch template tracks individual contact attempts as children of Task nodes:
    - Parent Task is marked done
    - Touch info rolls up to grandparent Contact's notes with timestamp
    - Contact's Last Contact is updated
-   - A new follow-up Task is created based on Activity Offset
+   - A new follow-up Task is created based on Contact Frequency (or global Activity Offset)
 
 ### Note Roll-up
 
@@ -147,14 +147,14 @@ python -m http.server 8000
 ## Keyboard Shortcuts
 
 - **Arrow keys** - Navigate nodes
-- **E** - Edit selected node
+- **E** - Edit selected node (or Meta card)
 - **C** - Add child node
 - **P** - Create new Contact node
 - **T** - Add Touch to Task
 - **F** - Fold/unfold node
 - **H** - Highlight/flag node
-- **D** - Auto-arrange subtree
-- **Delete** - Delete node
+- **D** - Auto-arrange subtree (creates Meta cards for groups of 8+)
+- **Delete** - Delete node (or Meta card)
 - **Ctrl+Z** - Undo
 - **Ctrl+Shift+Z** - Redo
 
@@ -180,7 +180,7 @@ python -m http.server 8000
 ### Changing persistence format
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
-- Current version: 13.0.5
+- Current version: 13.0.7
 
 ## Date Formatting
 

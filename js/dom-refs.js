@@ -60,15 +60,14 @@ window.DOM = (function() {
     cancelEditBtn: $('#cancelEdit'),
     saveEditBtn: $('#saveEdit'),
     colorPalette: $('#colorPalette'),
+    bgColorPalette: $('#bgColorPalette'),
     importAccountsBtn: $('#importAccounts'),
 
     // Touch template fields
     f_touchType: $('#f_touchType'),
     f_touchStatus: $('#f_touchStatus'),
-    f_activityOffset: $('#f_activityOffset'),
     touchTypeField: $('#touchTypeField'),
     touchStatusField: $('#touchStatusField'),
-    activityOffsetField: $('#activityOffsetField'),
     availableDetailsField: $('#availableDetailsField'),
 
     // Task touch radio buttons
@@ -100,6 +99,16 @@ window.DOM = (function() {
     // Shortcuts modal
     shortcutsBackdrop: $('#shortcutsBackdrop'),
     closeShortcutsBtn: $('#closeShortcuts'),
+
+    // Background color picker modal
+    bgColorBackdrop: $('#bgColorBackdrop'),
+    bgColorBtn: $('#bgColorBtn'),
+    bgColorPicker: $('#bgColorPicker'),
+    bgColorHex: $('#bgColorHex'),
+    bgColorPreview: $('#bgColorPreview'),
+    clearBgColorBtn: $('#clearBgColor'),
+    cancelBgColorBtn: $('#cancelBgColor'),
+    applyBgColorBtn: $('#applyBgColor'),
 
     // Touch modal
     touchBackdrop: $('#touchBackdrop'),

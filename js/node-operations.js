@@ -66,7 +66,8 @@ window.NodeOps = (function() {
 
     // Auto-scaffolding for Contact template - only create Tasks Sub-Tree
     if (node.template === 'Contact') {
-      var tasksTree = newNode('Tasks', 'Sub-Tree', node);
+      var contactName = node.title || 'Contact';
+      var tasksTree = newNode(contactName + ' Tasks', 'Sub-Tree', node);
       node.children.push(tasksTree);
     }
 
@@ -137,7 +138,6 @@ window.NodeOps = (function() {
         n.fields['Last Contact'] = n.fields['Last Contact']||'';
         n.fields['Next Contact'] = n.fields['Next Contact']||'';
         n.fields['LinkedIn'] = n.fields['LinkedIn']||'';
-        n.fields['Activity Offset'] = n.fields['Activity Offset']||'';
       }
 
       // Touch-specific field initialization
@@ -190,9 +190,10 @@ window.NodeOps = (function() {
 
     function setPos(n, depth, y) {
       var colOffset = getColumnOffset(depth);
-      n.pos.x = origin.x + (depth-start)*gapX + colOffset*gapX;
-      n.pos.y = y + (colOffset * maxPerColumn * gapY);
-      if(n!==root) n.anchored = true;
+      // Columns on same row (horizontal arrangement)
+      n.pos.x = origin.x + (depth - start) * gapX + colOffset * (gapX + 20);
+      n.pos.y = y;
+      if(n !== root) n.anchored = true;
     }
 
     function place(n, depth) {
@@ -306,9 +307,11 @@ window.NodeOps = (function() {
   function ensureScaffolding() {
     bfs(state.map, function(n){
       if(n.template==='Contact') {
-        var tasksTree = n.children.find(function(c){ return c.template==='Sub-Tree' && /^Tasks$/i.test(c.title); });
+        // Match "Tasks" or "<Name> Tasks" pattern
+        var tasksTree = n.children.find(function(c){ return c.template==='Sub-Tree' && /Tasks$/i.test(c.title); });
         if(!tasksTree) {
-          tasksTree = newNode('Tasks','Sub-Tree',n);
+          var contactName = n.title || 'Contact';
+          tasksTree = newNode(contactName + ' Tasks', 'Sub-Tree', n);
           n.children.push(tasksTree);
         }
       }
@@ -472,8 +475,8 @@ window.NodeOps = (function() {
       // 4. Update Contact's Last Contact
       contact.fields['Last Contact'] = utils.today();
 
-      // 5. Get Activity Offset (per-contact or global default)
-      var activityOffset = parseInt(contact.fields['Activity Offset']) ||
+      // 5. Get offset from Contact Frequency or global default
+      var activityOffset = utils.freqToDays(contact.freq) ||
                           parseInt(window.DOM.defaultOffsetInput.value) || 7;
       var nextDue = utils.advanceDate(utils.today(), activityOffset);
 
@@ -517,8 +520,8 @@ window.NodeOps = (function() {
     // Update Contact's Last Contact
     contact.fields['Last Contact'] = utils.today();
 
-    // Get Activity Offset (per-contact or global default)
-    var activityOffset = parseInt(contact.fields['Activity Offset']) ||
+    // Get offset from Contact Frequency or global default
+    var activityOffset = utils.freqToDays(contact.freq) ||
                         parseInt(window.DOM.defaultOffsetInput.value) || 7;
     var nextDue = utils.advanceDate(utils.today(), activityOffset);
 
@@ -597,8 +600,8 @@ window.NodeOps = (function() {
     });
     if(directTask) return directTask;
 
-    // No Task found, create one with due date based on offset
-    var offset = parseInt(contactNode.fields['Activity Offset']) ||
+    // No Task found, create one with due date based on Contact Frequency
+    var offset = utils.freqToDays(contactNode.freq) ||
                  parseInt(window.DOM.defaultOffsetInput.value) || 7;
     var dueDate = utils.advanceDate(utils.today(), offset);
 

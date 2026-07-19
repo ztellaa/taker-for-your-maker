@@ -63,6 +63,9 @@ window.Editor = (function() {
     }
   }
 
+  // Track selected background color
+  var selectedBgColor = null;
+
   function buildPalette(current) {
     dom.colorPalette.innerHTML = '';
     state.selectedPaletteColor = null;
@@ -84,6 +87,48 @@ window.Editor = (function() {
       };
 
       dom.colorPalette.appendChild(b);
+    });
+  }
+
+  function buildBgPalette(current) {
+    dom.bgColorPalette.innerHTML = '';
+    selectedBgColor = null;
+
+    // Add "none" option first (transparent/default)
+    var noneBtn = document.createElement('button');
+    noneBtn.className = 'swatchbtn';
+    noneBtn.type = 'button';
+    noneBtn.style.background = 'linear-gradient(135deg, #fff 45%, #ccc 45%, #ccc 55%, #fff 55%)';
+    noneBtn.title = 'Default (no background)';
+    noneBtn.setAttribute('aria-pressed', String(!current));
+    if(!current) selectedBgColor = null;
+
+    noneBtn.onclick = function() {
+      selectedBgColor = null;
+      utils.$$('.swatchbtn', dom.bgColorPalette).forEach(function(x){
+        x.setAttribute('aria-pressed','false');
+      });
+      noneBtn.setAttribute('aria-pressed','true');
+    };
+    dom.bgColorPalette.appendChild(noneBtn);
+
+    config.Palette.forEach(function(hex) {
+      var b = document.createElement('button');
+      b.className = 'swatchbtn';
+      b.type = 'button';
+      b.style.background = hex;
+      b.setAttribute('aria-pressed', String(hex===current));
+      if(hex===current) selectedBgColor = current;
+
+      b.onclick = function() {
+        selectedBgColor = hex;
+        utils.$$('.swatchbtn', dom.bgColorPalette).forEach(function(x){
+          x.setAttribute('aria-pressed','false');
+        });
+        b.setAttribute('aria-pressed','true');
+      };
+
+      dom.bgColorPalette.appendChild(b);
     });
   }
 
@@ -151,10 +196,14 @@ window.Editor = (function() {
     var lastContactField = dom.f_lastcontact.closest('.field');
     var nextContactField = dom.f_nextcontact.closest('.field');
     var statusField = dom.f_status.closest('.field');
+    var titleField = dom.f_title.closest('.field');
 
     var isContactTemplate = (tmpl === 'Contact');
     var isTaskTemplate = (tmpl === 'Task');
     var isTouchTemplate = (tmpl === 'Touch');
+
+    // v13.0.6: Hide title field for Contact (auto-generated from First Name + Last Name)
+    titleField.style.display = isContactTemplate ? 'none' : '';
 
     // Contact Frequency - only for Contact
     freqField.style.display = isContactTemplate ? '' : 'none';
@@ -168,11 +217,6 @@ window.Editor = (function() {
     // Last/Next Contact - for Contact
     lastContactField.style.display = isContactTemplate ? '' : 'none';
     nextContactField.style.display = isContactTemplate ? '' : 'none';
-
-    // Activity Offset - for Contact
-    if(dom.activityOffsetField) {
-      dom.activityOffsetField.style.display = isContactTemplate ? '' : 'none';
-    }
 
     // Touch Type and Status - for Touch template
     if(dom.touchTypeField) {
@@ -229,11 +273,6 @@ window.Editor = (function() {
     dom.f_lastcontact.value = originalLastContact;
     dom.f_nextcontact.value = utils.normalizeDate((node.fields && node.fields['Next Contact']) || '');
 
-    // Set Activity Offset for Contact
-    if(dom.f_activityOffset) {
-      dom.f_activityOffset.value = (node.fields && node.fields['Activity Offset']) || '';
-    }
-
     // Set Touch fields for Touch template
     if(dom.f_touchType) {
       dom.f_touchType.value = (node.fields && node.fields['Touch Type']) || '';
@@ -243,10 +282,11 @@ window.Editor = (function() {
     }
 
     buildPalette(node.color);
+    buildBgPalette(node.bgColor || null);
     dom.kvArea.innerHTML = '';
     var entries = Object.entries(node.fields||{}).filter(function(entry){
       // Filter out fields we handle separately
-      return ['Last Contact','Next Contact','Activity Offset','Touch Type','Status'].indexOf(entry[0])===-1;
+      return ['Last Contact','Next Contact','Touch Type','Status'].indexOf(entry[0])===-1;
     });
     if(entries.length===0) {
       addKVRow('','');
@@ -276,20 +316,6 @@ window.Editor = (function() {
         var month = String(nextContact.getMonth() + 1).padStart(2, '0');
         var day = String(nextContact.getDate()).padStart(2, '0');
         dom.f_nextcontact.value = year + '-' + month + '-' + day;
-      }
-    };
-
-    // Auto-set Activity Offset when Contact Frequency changes
-    dom.f_freq.onchange = function() {
-      var freq = this.value;
-      var offsetDays = 0;
-      if(freq === 'monthly') offsetDays = 30;
-      else if(freq === 'quarterly') offsetDays = 90;
-      else if(freq === 'biannually') offsetDays = 180;
-      else if(freq === 'annually') offsetDays = 365;
-
-      if(offsetDays > 0 && dom.f_activityOffset) {
-        dom.f_activityOffset.value = offsetDays;
       }
     };
 
@@ -349,7 +375,21 @@ window.Editor = (function() {
       var prevStatus = node.status;
       var prevTouchStatus = (node.fields && node.fields['Status']) || '';
 
-      node.title = dom.f_title.value.trim() || 'Untitled';
+      // v13.0.6: For Contact, auto-generate title from First Name + Last Name
+      if(dom.f_template.value === 'Contact' || node.template === 'Contact') {
+        // Get names from KV fields
+        var firstName = '', lastName = '';
+        utils.$$('.kv-line', dom.kvArea).forEach(function(line) {
+          var k = utils.$('input[data-k]', line).value.trim();
+          var v = utils.$('input[data-v]', line).value.trim();
+          if(k === 'First Name') firstName = v;
+          if(k === 'Last Name') lastName = v;
+        });
+        var generatedTitle = (firstName + ' ' + lastName).trim();
+        node.title = generatedTitle || 'Contact';
+      } else {
+        node.title = dom.f_title.value.trim() || 'Untitled';
+      }
       node.due = dom.f_due.value;
       node.notes = dom.f_notes.value.trim();
       node.template = dom.f_template.value || prevTemplate;
@@ -395,11 +435,6 @@ window.Editor = (function() {
         node.fields['Next Contact'] = dom.f_nextcontact.value || '';
       }
 
-      // Save Activity Offset for Contact
-      if(dom.activityOffsetField && dom.activityOffsetField.style.display !== 'none') {
-        node.fields['Activity Offset'] = dom.f_activityOffset.value || '';
-      }
-
       // Save Touch Type and Status for Touch template
       if(dom.touchTypeField && dom.touchTypeField.style.display !== 'none') {
         node.fields['Touch Type'] = dom.f_touchType.value || '';
@@ -410,6 +445,7 @@ window.Editor = (function() {
 
       nodeOps.ensureTags(node);
       node.color = state.selectedPaletteColor || node.color;
+      node.bgColor = selectedBgColor || null;
 
       dom.editorBackdrop.style.display = 'none';
       dom.editorBackdrop.setAttribute('aria-hidden','true');
