@@ -106,7 +106,12 @@ window.Render = (function() {
       } else {
         card.style.borderColor = utils.shade(n.color, -0.2);
       }
-      if(n.bgColor) {
+      if(n.template === 'Contact' && nodeOps.isRecentlyCompleted(n)) {
+        // A Task completed today or yesterday - temporarily override the
+        // card background with the same "done" green used elsewhere, then
+        // fall back to the default/custom background after that window.
+        card.style.background = 'linear-gradient(135deg, #1a3d1a, #0f2d0f)';
+      } else if(n.bgColor) {
         card.style.backgroundColor = n.bgColor;
         card.style.backgroundImage = 'none'; // suppress .task-done's gradient image so custom bg always wins
       }

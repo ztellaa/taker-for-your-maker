@@ -51,6 +51,7 @@ Nodes are tree-structured objects with this shape:
   color: string,        // Hex color
   colorIsCustom: boolean, // True once a Contact's Frame Color is manually set (opts out of "rotting")
   analyticsLogged: boolean, // Guards against double-counting Analytics when a Task is saved repeatedly
+  lastTaskCompletedDate: string, // ISO date a child Task last completed; drives the 2-day "just completed" green card background
   anchored: boolean,    // Reserved for future use
   children: array,
   pos: {x, y}          // Absolute coordinates in mind map
@@ -119,6 +120,7 @@ Node cards have dynamic styling:
 - Task nodes turn green when status is 'done'
 - **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact. An overdue not-done Task anywhere under the Contact (`nodeOps.getContactNextOpenTask()`) forces full rot regardless of how recent Last Contact is (v14.1.1).
 - **"Next" display** (v14.1.1) - the Contact card's "Next: `<date>`" badge no longer reflects the standalone `fields['Next Contact']` field. It only appears when there's an actual outstanding (not-done) Task under the Contact, showing that Task's due date (overdue = red badge, future = plain). No open Task means no "Next" badge at all. The `Next Contact` field/editor input still exists in the data model for manual reference, but no longer drives what's shown on the card.
+- **"Just completed" glow** (v14.1.2) - a Contact card's *background* (separate from the border-based rotting color) temporarily switches to the same dark-green gradient used for done Tasks whenever a Task under it completed today or yesterday (`node.lastTaskCompletedDate`, stamped by `applyTaskCompletion()`; checked via `nodeOps.isRecentlyCompleted()`). This overrides any custom card Background Color for that 2-day window, then falls back to the custom color (or the default panel background) automatically once the window passes - there's no cleanup step, it's just a live date comparison on every render.
 
 ### View Modes
 
@@ -189,7 +191,7 @@ python -m http.server 8000
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
 - Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`
-- Current version: 14.1.1
+- Current version: 14.1.2
 
 ## Date Formatting
 
@@ -214,5 +216,6 @@ Helper functions in `node-operations.js`:
 - `getContactTasks(contactNode)` - Gets all Tasks under a Contact (including Sub-Trees)
 - `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact (or forced full-rot if there's an overdue open Task)
 - `getContactNextOpenTask(contact)` - Returns the soonest-due not-done Task under a Contact (any depth), or `null`
+- `isRecentlyCompleted(contact)` - True if `lastTaskCompletedDate` is today or yesterday; drives the temporary green card background
 - `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
 - `rollUpNote(noteNode)` - Rolls note content to parent Contact

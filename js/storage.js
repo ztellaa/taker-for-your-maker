@@ -6,7 +6,7 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '14.1.1';
+  var CURRENT_VERSION = '14.1.2';
 
   function markDirty() {
     state.lastDirty = Date.now();
@@ -242,6 +242,7 @@ window.Storage = (function() {
       // Backfill v14 node flags
       if (n.colorIsCustom == null) n.colorIsCustom = false;
       if (n.analyticsLogged == null) n.analyticsLogged = false;
+      if (n.lastTaskCompletedDate == null) n.lastTaskCompletedDate = '';
 
       // Contact-specific field initialization
       if (n.template === 'Contact') {

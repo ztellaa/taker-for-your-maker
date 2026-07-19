@@ -56,6 +56,7 @@ window.NodeOps = (function() {
       color: color,
       colorIsCustom: false,
       analyticsLogged: false,
+      lastTaskCompletedDate: '',
       anchored: false,
       children: [],
       pos: parent ? {x:base.x+280+Math.random()*60, y:base.y+(parent.children.length*90+Math.random()*40)} : {x:0,y:0}
@@ -451,14 +452,17 @@ window.NodeOps = (function() {
   }
 
   // Apply the side effects of a Task being completed: stamp the parent
-  // Contact's Last Contact (drives "rotting"), and log to Analytics once
-  // if a Channel is set. Idempotent - safe to call on every Task save.
+  // Contact's Last Contact (drives "rotting") and lastTaskCompletedDate
+  // (drives the temporary green card background below), and log to
+  // Analytics once if a Channel is set. Idempotent - safe to call on every
+  // Task save.
   function applyTaskCompletion(taskNode) {
     if(!taskNode || taskNode.template !== 'Task' || taskNode.status !== 'done') return;
 
     var contact = findParentContact(taskNode.id);
     if(contact) {
       contact.fields['Last Contact'] = utils.today();
+      contact.lastTaskCompletedDate = utils.today();
     }
 
     if(taskNode.fields && taskNode.fields['Channel'] && !taskNode.analyticsLogged) {
@@ -467,6 +471,15 @@ window.NodeOps = (function() {
       }
       taskNode.analyticsLogged = true;
     }
+  }
+
+  // True if a Task under this Contact completed today or yesterday - drives
+  // a temporary green card background (see render.js) separate from the
+  // border-based "rotting" indicator.
+  function isRecentlyCompleted(contact) {
+    var d = contact && contact.lastTaskCompletedDate;
+    if(!d) return false;
+    return utils.daysBetween(d, utils.today()) <= 1;
   }
 
   // Roll up Note content to parent Contact's Notes field
@@ -553,6 +566,7 @@ window.NodeOps = (function() {
     getAvailableChannels: getAvailableChannels,
     findParentContact: findParentContact,
     getContactRotColor: getContactRotColor,
+    isRecentlyCompleted: isRecentlyCompleted,
     applyTaskCompletion: applyTaskCompletion,
     rollUpNote: rollUpNote,
     getContactDescendants: getContactDescendants,
