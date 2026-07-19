@@ -39,6 +39,21 @@ window.Utils = {
     }
   },
 
+  // Convert hex color to rgba with alpha
+  hexToRgba: function(hex, alpha) {
+    try {
+      var c = hex.replace('#','');
+      if(c.length === 3) {
+        c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+      }
+      var num = parseInt(c,16);
+      var r = (num>>16)&255, g = (num>>8)&255, b = num&255;
+      return 'rgba('+r+','+g+','+b+','+alpha+')';
+    } catch(e) {
+      return hex;
+    }
+  },
+
   // Label status for display
   labelStatus: function(s) {
     return ({

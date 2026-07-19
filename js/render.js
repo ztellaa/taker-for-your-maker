@@ -108,6 +108,9 @@ window.Render = (function() {
       card.dataset.id = n.id;
       card.dataset.template = n.template;
       card.style.borderColor = utils.shade(n.color, -0.2);
+      if(n.bgColor) {
+        card.style.backgroundColor = n.bgColor;
+      }
 
       var typeChip = '<span class="chip"><span class="swatch" style="background:' + (config.TemplateChipColors[n.template] || '#6b7280') + '"></span>' + utils.esc(n.template) + '</span>';
       var collapsedChip = n.collapsed ? '<span class="badge" title="Collapsed">▸</span>' : '';
@@ -203,12 +206,13 @@ window.Render = (function() {
       meta.innerHTML = metaFragments.join(' ');
 
       // Build KV section (fields) - exclude Tags, they go at the bottom
+      // Contact cards only show Email/LinkedIn/Cell in custom show() function
       var kv = null;
       var tagsSection = null;
       var notesSection = null;
-      var excludeFields = ['Last Contact', 'Next Contact', 'Activity Offset', 'Touch Type', 'Status', 'Tags'];
+      var excludeFields = ['Last Contact', 'Next Contact', 'Touch Type', 'Status', 'Tags'];
 
-      if(n.template !== 'Sub-Tree' && n.template !== 'Touch') {
+      if(n.template !== 'Sub-Tree' && n.template !== 'Touch' && n.template !== 'Contact') {
         var fieldEntries = Object.entries(n.fields || {}).filter(function(entry) {
           return excludeFields.indexOf(entry[0]) === -1;
         });
@@ -221,25 +225,11 @@ window.Render = (function() {
           }).join('');
         }
 
-        // Notes section for Contact
-        if(n.notes && n.template === 'Contact') {
-          notesSection = document.createElement('div');
-          notesSection.className = 'kv';
-          notesSection.innerHTML = '<div><strong>Notes:</strong> ' + utils.esc(n.notes).slice(0, 80) + (n.notes.length > 80 ? '…' : '') + '</div>';
-        } else if(n.notes) {
-          // Notes preview for non-Contact templates
+        // Notes preview for non-Contact templates
+        if(n.notes) {
           notesSection = document.createElement('div');
           notesSection.className = 'meta';
           notesSection.innerHTML = '<span>📝 ' + utils.esc(n.notes).slice(0, 40) + (n.notes.length > 40 ? '…' : '') + '</span>';
-        }
-
-        // Tags section at bottom
-        var tags = (n.fields && n.fields['Tags']) || '';
-        if(tags && n.template === 'Contact') {
-          tagsSection = document.createElement('div');
-          tagsSection.className = 'meta';
-          tagsSection.style.marginTop = '6px';
-          tagsSection.innerHTML = '<span style="color:var(--muted)">🏷️ ' + utils.esc(tags) + '</span>';
         }
       }
 

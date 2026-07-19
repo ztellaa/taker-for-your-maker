@@ -6,15 +6,16 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '13.0.5';
+  var CURRENT_VERSION = '13.0.7';
 
   function markDirty() {
     state.lastDirty = Date.now();
     try {
       localStorage.setItem('wm.mindmap', JSON.stringify({
-version: CURRENT_VERSION,
+        version: CURRENT_VERSION,
         createdAt: Date.now(),
-        map: state.map
+        map: state.map,
+        mapBgColor: state.mapBgColor
       }));
     } catch(e) {}
   }
@@ -29,9 +30,10 @@ version: CURRENT_VERSION,
 
   function downloadCurrent() {
     var payload = {
-version: CURRENT_VERSION,
+      version: CURRENT_VERSION,
       createdAt: Date.now(),
-      map: state.map
+      map: state.map,
+      mapBgColor: state.mapBgColor
     };
 
     try {
@@ -51,8 +53,13 @@ version: CURRENT_VERSION,
     var m = (data && data.map) ? migrate(data) : migrate({version:0, map:data});
     state.map = m.map;
     state.selectedId = state.map.id;
+    state.mapBgColor = data.mapBgColor || null;
     nodeOps.ensurePositions();
     nodeOps.ensureScaffolding();
+    // Apply saved map background color
+    if(window.Events && window.Events.applyMapBackground) {
+      window.Events.applyMapBackground(state.mapBgColor);
+    }
     markDirty();
     window.Render.renderMindMap();
     window.Render.buildList();
@@ -76,7 +83,7 @@ version: CURRENT_VERSION,
   function snapshotBackup(reason) {
     if(reason===undefined) reason = 'autosave';
     var payload = {
-version: CURRENT_VERSION,
+      version: CURRENT_VERSION,
       createdAt: Date.now(),
       reason: reason,
       map: state.map
@@ -139,10 +146,6 @@ version: CURRENT_VERSION,
       nodeOps.bfs(m, function(n) {
         if (['Client', 'COI', 'Opportunity'].indexOf(n.template) !== -1) {
           n.template = 'Contact';
-          // Ensure Activity Offset field exists
-          if (!n.fields['Activity Offset']) {
-            n.fields['Activity Offset'] = '';
-          }
           // Ensure LinkedIn field exists (may have been missing on some old nodes)
           if (!n.fields['LinkedIn']) {
             n.fields['LinkedIn'] = '';
@@ -231,7 +234,16 @@ version: CURRENT_VERSION,
         n.fields['Last Contact'] = n.fields['Last Contact'] || '';
         n.fields['Next Contact'] = n.fields['Next Contact'] || '';
         n.fields['LinkedIn'] = n.fields['LinkedIn'] || '';
-        n.fields['Activity Offset'] = n.fields['Activity Offset'] || '';
+
+        // Migrate Activity Offset to freq (v13.0.7)
+        if (n.fields['Activity Offset'] && !n.freq) {
+          var offset = parseInt(n.fields['Activity Offset']);
+          if (offset <= 30) n.freq = 'monthly';
+          else if (offset <= 90) n.freq = 'quarterly';
+          else if (offset <= 182) n.freq = 'biannually';
+          else n.freq = 'annually';
+        }
+        delete n.fields['Activity Offset'];
       }
 
       // Touch-specific field initialization
