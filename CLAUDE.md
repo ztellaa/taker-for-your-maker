@@ -53,8 +53,7 @@ Nodes are tree-structured objects with this shape:
   analyticsLogged: boolean, // Guards against double-counting Analytics when a Task is saved repeatedly
   lastTaskCompletedDate: string, // ISO date a child Task last completed successfully; drives the 2-day "just completed" green card background
   successful: boolean,  // Task only - true only via the "Success!" editor button, not the normal Save button
-  failedTaskStreak: number, // Contact only - consecutive non-successful completed Tasks; drives red background shading
-  completionCounted: boolean, // Guards against double-counting a Task's completion into failedTaskStreak/lastTaskCompletedDate on repeat saves
+  completionCounted: boolean, // Guards against double-counting a Task's completion into lastTaskCompletedDate on repeat saves
   anchored: boolean,    // Reserved for future use
   children: array,
   pos: {x, y}          // Absolute coordinates in mind map
@@ -89,16 +88,20 @@ The Touch template was removed in v14. Logging a contact touch is now just creat
 3. The Task is born `status: 'done'` but its completion side effects don't apply until the editor is actually saved (Save or Success! - see below) - `nodeOps.applyTaskCompletion(taskNode)` runs on any Task save where `status === 'done'`, not at creation, so a cancelled edit doesn't lock in a false "failure":
    - The parent Contact's `Last Contact` field is stamped to today - this is what drives "rotting" (see Rendering System below)
    - If a `Channel` is set and hasn't been logged yet, it's recorded once to the weekly Analytics BD tracker (`Analytics.recordTouch`), guarded by `node.analyticsLogged`
-   - Depending on whether the Task was marked successful (below), it either resets or extends the parent Contact's `failedTaskStreak`
+   - If the Task was marked successful (below), it also stamps `lastTaskCompletedDate` (the "just completed" green glow) - a non-successful completion has no Contact-level effect beyond the Last Contact stamp
    - There is **no** automatic follow-up Task creation and **no** note roll-up anymore - the rotting frame color is the only staleness signal now
 
 Existing Touch nodes in older saved data are migrated on load (`storage.js:migrate()`, v14 block) into completed/todo Tasks with a `Channel` field, preserving their notes and due date.
 
 ### Task Success/Failure Tracking (v14.2)
 
-The Task editor has two ways to complete a Task: **Save** (marks it done per the status dropdown, `node.successful` left `false`/untouched) and **Success!** (`#successBtn`, Task template only - forces `status: 'done'` and `node.successful = true`). Both funnel through the same `performSave(markSuccessful)` in `editor.js`. This distinction drives two things:
-- **Task card color** - done + successful → green `.task-done` (unchanged from before); done + not successful → orange `.node.task-unsuccessful` (new).
-- **Contact card background** - a successful completion resets the parent Contact's `failedTaskStreak` to 0 and triggers the "just completed" green glow; a non-successful completion increments `failedTaskStreak` (capped visually at 10) and shades the Contact's background from the default panel color toward dark red via `nodeOps.getContactFailShade()` - respects a manually-set card Background Color (skipped if `n.bgColor` is set), same as border rotting respects `colorIsCustom`. One success fully resets the shading back to default.
+The Task editor has two ways to complete a Task: **Save** (marks it done per the status dropdown, `node.successful` left `false`/untouched) and **Success!** (`#successBtn`, Task template only - forces `status: 'done'` and `node.successful = true`). Both funnel through the same `performSave(markSuccessful)` in `editor.js`. This distinction drives:
+- **Task card color** - done + successful → green `.task-done` (unchanged from before); done + not successful → orange `.node.task-unsuccessful` (new). Field text (`.kv`) on both is forced black for contrast against these light-ish gradients.
+- **Contact card background** - only a successful completion has any effect (triggers the "just completed" green glow via `lastTaskCompletedDate`). A non-successful completion does **not** change the Contact's background at all - v14.2 originally also shaded it toward red on a failure streak, but that was rolled back in v14.2.1 as a bug fix.
+
+### Editor Title (v14.2.1)
+
+`editor.js:openEditor(id)` sets `#editorTitle`'s text to `"Edit Node - " + node.title` when the modal opens (`dom.editorTitle`, added to `dom-refs.js`), instead of the static "Edit Node". Set once at open time, not live-updated as the Title field is edited.
 
 ### Note Roll-up
 
@@ -131,8 +134,8 @@ Node cards have dynamic styling:
 - Task nodes turn green (`.task-done`) when done and marked successful, orange (`.node.task-unsuccessful`, v14.2) when done but not marked successful
 - **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact. An overdue not-done Task anywhere under the Contact (`nodeOps.getContactNextOpenTask()`) forces full rot regardless of how recent Last Contact is (v14.1.1).
 - **"Next" display** (v14.1.1) - the Contact card's "Next: `<date>`" badge no longer reflects the standalone `fields['Next Contact']` field. It only appears when there's an actual outstanding (not-done) Task under the Contact, showing that Task's due date (overdue = red badge, future = plain). No open Task means no "Next" badge at all. The `Next Contact` field/editor input still exists in the data model for manual reference, but no longer drives what's shown on the card.
-- **Contact background precedence** (`render.js`, order matters) - (1) "just completed" glow: dark-green gradient for 2 days after a *successful* Task completion (`nodeOps.isRecentlyCompleted()`), overrides everything; (2) failure-streak shading (v14.2): dark red shading via `nodeOps.getContactFailShade()` when `failedTaskStreak > 0`, skipped if a custom `bgColor` is set; (3) custom card Background Color; (4) default panel color.
-- **Multi-select highlight** (v14.2) - `render.js:highlightSelection()` gives cards in `state.multiSelectedIds` an outline reaching twice as far from the card edge (6px offset + 2px width = 8px) as a normal single selection (2px offset + 2px width = 4px).
+- **Contact background precedence** (`render.js`, order matters) - (1) "just completed" glow: dark-green gradient for 2 days after a *successful* Task completion (`nodeOps.isRecentlyCompleted()`), overrides everything; a non-successful completion has no effect here (v14.2.1 - a red failure-shade was tried in v14.2 and rolled back); (2) custom card Background Color; (3) default panel color.
+- **Selection highlight** (v14.2.1) - `render.js:highlightSelection()` gives selected cards a thick white outline (3px width), doubled reach for multi-selected cards (`state.multiSelectedIds`) vs. a single selection. Since `.node` cards live inside the zoom-scaled `#stage`, the outline width/offset are divided by `state.zoom` so they read as a consistent on-screen size at any zoom level - re-applied after every zoom change (`events.js`: `applyZoom()`, the wheel handler, and `zoomResetBtn`), not just on selection changes.
 
 ### Multi-select (v14.2)
 
@@ -209,7 +212,7 @@ python -m http.server 8000
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
 - Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`/`snapshotToFolder()`
-- Current version: 14.2.0
+- Current version: 14.2.1
 
 ## Date Formatting
 
@@ -235,7 +238,6 @@ Helper functions in `node-operations.js`:
 - `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact (or forced full-rot if there's an overdue open Task)
 - `getContactNextOpenTask(contact)` - Returns the soonest-due not-done Task under a Contact (any depth), or `null`
 - `isRecentlyCompleted(contact)` - True if `lastTaskCompletedDate` is today or yesterday; drives the temporary green card background
-- `getContactFailShade(contact)` - Returns a hex color shading from the default panel color toward dark red as `failedTaskStreak` approaches 10 (v14.2)
-- `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact, resets/extends `failedTaskStreak` depending on `taskNode.successful`, and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
+- `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact, stamps `lastTaskCompletedDate` if `taskNode.successful`, and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
 - `nextChildPos(parent)` - Deterministic position for a new child, directly below the lowest existing sibling (v14.2)
 - `rollUpNote(noteNode)` - Rolls note content to parent Contact

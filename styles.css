@@ -397,7 +397,6 @@
   
   .row:hover{
     background:var(--panel-2);
-    transform:translateX(2px);
   }
   
   .row .crumbs{
@@ -965,6 +964,12 @@
 
   .node.task-unsuccessful:hover {
     border-color: #f59e0b !important;
+  }
+
+  /* Field text on done/unsuccessful Task cards */
+  .node.task-done .kv,
+  .node.task-unsuccessful .kv {
+    color: #000000;
   }
 
   /* Disabled channel radio buttons */

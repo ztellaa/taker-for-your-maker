@@ -72,7 +72,6 @@ window.NodeOps = (function() {
       analyticsLogged: false,
       lastTaskCompletedDate: '',
       successful: false,
-      failedTaskStreak: 0,
       completionCounted: false,
       anchored: false,
       children: [],
@@ -471,13 +470,13 @@ window.NodeOps = (function() {
   }
 
   // Apply the side effects of a Task being completed: stamp the parent
-  // Contact's Last Contact (drives "rotting"), and either reset or extend
-  // its failure streak depending on whether the Task was marked successful
-  // (see the "Success!" editor button) - a success also stamps
-  // lastTaskCompletedDate (drives the temporary green card background), a
-  // non-success does not. Also logs to Analytics once if a Channel is set.
-  // The completionCounted/analyticsLogged guards make this idempotent - safe
-  // to call on every Task save, not just the first time it's marked done.
+  // Contact's Last Contact (drives "rotting"), and if the Task was marked
+  // successful (see the "Success!" editor button), stamp
+  // lastTaskCompletedDate (drives the temporary green card background) - a
+  // non-successful completion has no Contact-level visual effect at all.
+  // Also logs to Analytics once if a Channel is set. The
+  // completionCounted/analyticsLogged guards make this idempotent - safe to
+  // call on every Task save, not just the first time it's marked done.
   function applyTaskCompletion(taskNode) {
     if(!taskNode || taskNode.template !== 'Task' || taskNode.status !== 'done') return;
 
@@ -487,10 +486,7 @@ window.NodeOps = (function() {
 
       if(!taskNode.completionCounted) {
         if(taskNode.successful) {
-          contact.failedTaskStreak = 0;
           contact.lastTaskCompletedDate = utils.today();
-        } else {
-          contact.failedTaskStreak = (contact.failedTaskStreak || 0) + 1;
         }
         taskNode.completionCounted = true;
       }
@@ -502,15 +498,6 @@ window.NodeOps = (function() {
       }
       taskNode.analyticsLogged = true;
     }
-  }
-
-  // Contact card background shading for a run of non-successful completed
-  // Tasks - interpolates the default panel color toward dark red as the
-  // streak approaches 10, resetting to 0 (default) on the next success.
-  function getContactFailShade(contact) {
-    var streak = (contact && contact.failedTaskStreak) || 0;
-    var t = utils.clamp(streak / 10, 0, 1);
-    return utils.lerpColor('#1a1b1e', '#3d1a1a', t);
   }
 
   // True if a Task under this Contact completed today or yesterday - drives
@@ -607,7 +594,6 @@ window.NodeOps = (function() {
     findParentContact: findParentContact,
     getContactRotColor: getContactRotColor,
     isRecentlyCompleted: isRecentlyCompleted,
-    getContactFailShade: getContactFailShade,
     applyTaskCompletion: applyTaskCompletion,
     rollUpNote: rollUpNote,
     getContactDescendants: getContactDescendants,

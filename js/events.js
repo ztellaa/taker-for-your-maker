@@ -150,6 +150,7 @@ window.Events = (function() {
     state.zoom = newZoom;
 
     stageTransform();
+    window.Render.highlightSelection(); // re-scale the selection outline for the new zoom
   }
 
   // Arrow-key navigation helpers
@@ -223,6 +224,7 @@ window.Events = (function() {
       state.zoom = newZoom;
 
       stageTransform();
+      window.Render.highlightSelection(); // re-scale the selection outline for the new zoom
     }, {passive:false});
   }
 
@@ -620,6 +622,7 @@ window.Events = (function() {
       state.tx = 40;
       state.ty = 45;
       stageTransform();
+      window.Render.highlightSelection();
     };
 
     // Main action buttons
