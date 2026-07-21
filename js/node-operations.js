@@ -17,13 +17,27 @@ window.NodeOps = (function() {
     n.fields['Tags'] = t.join(', ');
   }
 
+  // Where a new child of `parent` should land - directly below the lowest
+  // existing sibling, one gapY further down, at a fixed gapX from the
+  // parent. No randomness, and it looks at actual sibling positions rather
+  // than a naive child-count multiplier, so cards don't clump/scatter after
+  // siblings have been dragged around or auto-arranged. Same spacing
+  // convention as tidySubtree() (the "Arrange" function) for visual
+  // consistency between manual and auto-arranged layouts.
+  function nextChildPos(parent) {
+    if(!parent || !parent.pos) return {x:0, y:0};
+    var gapX = 300, gapY = 100;
+    var siblingYs = (parent.children||[]).filter(function(c){ return c.pos; }).map(function(c){ return c.pos.y; });
+    var y = siblingYs.length ? Math.max.apply(null, siblingYs) + gapY : parent.pos.y;
+    return {x: parent.pos.x + gapX, y: y};
+  }
+
   function newNode(title, tmpl, parent) {
     if(title===undefined) title="Untitled";
     if(tmpl===undefined) tmpl="";
     if(parent===undefined) parent=null;
 
     var effective = tmpl || (parent && parent.template) || 'Contact';
-    var base = (parent && parent.pos) || {x:0,y:0};
     var tFields = (config.Templates[effective] && config.Templates[effective].fields) ?
       (function(o){var c={}; for(var k in o){ if(Object.prototype.hasOwnProperty.call(o,k)) c[k]=o[k]; } return c;})(config.Templates[effective].fields) : {};
     if(!tFields['Tags']) tFields['Tags']='';
@@ -57,9 +71,12 @@ window.NodeOps = (function() {
       colorIsCustom: false,
       analyticsLogged: false,
       lastTaskCompletedDate: '',
+      successful: false,
+      failedTaskStreak: 0,
+      completionCounted: false,
       anchored: false,
       children: [],
-      pos: parent ? {x:base.x+280+Math.random()*60, y:base.y+(parent.children.length*90+Math.random()*40)} : {x:0,y:0}
+      pos: parent ? nextChildPos(parent) : {x:0,y:0}
     };
 
     ensureTags(node);
@@ -352,6 +369,8 @@ window.NodeOps = (function() {
     var ok = window.confirm('Delete "'+node.title+'" and all of its children? This cannot be undone.');
     if(!ok) return;
 
+    state.multiSelectedIds.clear();
+
     if(state.map.id===id) {
       state.map = newNode('Root','Contact',null);
       state.map.pos = {x:0,y:0};
@@ -452,17 +471,29 @@ window.NodeOps = (function() {
   }
 
   // Apply the side effects of a Task being completed: stamp the parent
-  // Contact's Last Contact (drives "rotting") and lastTaskCompletedDate
-  // (drives the temporary green card background below), and log to
-  // Analytics once if a Channel is set. Idempotent - safe to call on every
-  // Task save.
+  // Contact's Last Contact (drives "rotting"), and either reset or extend
+  // its failure streak depending on whether the Task was marked successful
+  // (see the "Success!" editor button) - a success also stamps
+  // lastTaskCompletedDate (drives the temporary green card background), a
+  // non-success does not. Also logs to Analytics once if a Channel is set.
+  // The completionCounted/analyticsLogged guards make this idempotent - safe
+  // to call on every Task save, not just the first time it's marked done.
   function applyTaskCompletion(taskNode) {
     if(!taskNode || taskNode.template !== 'Task' || taskNode.status !== 'done') return;
 
     var contact = findParentContact(taskNode.id);
     if(contact) {
       contact.fields['Last Contact'] = utils.today();
-      contact.lastTaskCompletedDate = utils.today();
+
+      if(!taskNode.completionCounted) {
+        if(taskNode.successful) {
+          contact.failedTaskStreak = 0;
+          contact.lastTaskCompletedDate = utils.today();
+        } else {
+          contact.failedTaskStreak = (contact.failedTaskStreak || 0) + 1;
+        }
+        taskNode.completionCounted = true;
+      }
     }
 
     if(taskNode.fields && taskNode.fields['Channel'] && !taskNode.analyticsLogged) {
@@ -471,6 +502,15 @@ window.NodeOps = (function() {
       }
       taskNode.analyticsLogged = true;
     }
+  }
+
+  // Contact card background shading for a run of non-successful completed
+  // Tasks - interpolates the default panel color toward dark red as the
+  // streak approaches 10, resetting to 0 (default) on the next success.
+  function getContactFailShade(contact) {
+    var streak = (contact && contact.failedTaskStreak) || 0;
+    var t = utils.clamp(streak / 10, 0, 1);
+    return utils.lerpColor('#1a1b1e', '#3d1a1a', t);
   }
 
   // True if a Task under this Contact completed today or yesterday - drives
@@ -567,6 +607,7 @@ window.NodeOps = (function() {
     findParentContact: findParentContact,
     getContactRotColor: getContactRotColor,
     isRecentlyCompleted: isRecentlyCompleted,
+    getContactFailShade: getContactFailShade,
     applyTaskCompletion: applyTaskCompletion,
     rollUpNote: rollUpNote,
     getContactDescendants: getContactDescendants,

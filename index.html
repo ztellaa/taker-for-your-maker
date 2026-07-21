@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>RBC Wealth Map – v14.1.2</title>
+<title>RBC Wealth Map – v14.2.0</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -221,19 +221,20 @@
     </div>
     <div class="actions">
       <button class="btn" id="cancelEdit" type="button">Cancel</button>
+      <button class="btn" id="successBtn" type="button" style="display:none;background:#10b981;color:#fff;border-color:#10b981">Success!</button>
       <button class="btn accent" id="saveEdit" type="button">Save</button>
     </div>
   </div>
 </div>
 
-<!-- Backup Reminder Modal -->
-<div class="modal-backdrop" id="backupReminderBackdrop" aria-hidden="true">
-  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="backupReminderTitle">
-    <h3 id="backupReminderTitle">Back Up Your CRM Folder</h3>
-    <p style="color: var(--muted); margin-bottom: 16px;">It's been a week since your last reminder. Copy your CRM folder somewhere safe (e.g. OneDrive, a USB drive) in case local storage gets wiped again.</p>
-    <div class="actions">
-      <button class="btn accent" id="dismissBackupReminder" type="button">Remind me in a week</button>
-    </div>
+<!-- Backup Reminder Popup - a non-blocking floating card, NOT a modal, so it
+     can never cover/block the rest of the app even if something goes wrong -->
+<div class="floating-popup" id="backupReminderPopup" role="status" aria-live="polite" hidden>
+  <button class="floating-popup-close" id="closeBackupReminder" type="button" aria-label="Close">×</button>
+  <h4>Back Up Your CRM Folder</h4>
+  <p>It's been a week since your last reminder. Copy your CRM folder somewhere safe (e.g. OneDrive, a USB drive) in case local storage gets wiped again.</p>
+  <div class="actions">
+    <button class="btn accent" id="dismissBackupReminder" type="button">Remind me in a week</button>
   </div>
 </div>
 
@@ -435,7 +436,7 @@ John Smith,john@example.com,555-123-4567,Met at the Q1 conference</textarea>
   </div>
 </div>
 
-<div class="hint" id="hint">v14.1.2: Contact cards glow green for 2 days after a task completes</div>
+<div class="hint" id="hint">v14.2.0: Success/failure tracking • Multi-select (shift/ctrl) • Reliable CRM folder backups</div>
 
 <!-- Load modules in dependency order -->
 <script src="js/config.js"></script>

@@ -39,9 +39,10 @@ window.DOM = (function() {
     crmFolderBtn: $('#crmFolderBtn'),
     restoreFromFolderBtn: $('#restoreFromFolderBtn'),
 
-    // Backup reminder modal
-    backupReminderBackdrop: $('#backupReminderBackdrop'),
+    // Backup reminder popup (floating, non-modal)
+    backupReminderPopup: $('#backupReminderPopup'),
     dismissBackupReminderBtn: $('#dismissBackupReminder'),
+    closeBackupReminderBtn: $('#closeBackupReminder'),
 
     // List view
     listView: $('#listView'),
@@ -65,6 +66,7 @@ window.DOM = (function() {
     addKVBtn: $('#addKV'),
     cancelEditBtn: $('#cancelEdit'),
     saveEditBtn: $('#saveEdit'),
+    successBtn: $('#successBtn'),
     colorPalette: $('#colorPalette'),
     bgColorPalette: $('#bgColorPalette'),
     importAccountsBtn: $('#importAccounts'),

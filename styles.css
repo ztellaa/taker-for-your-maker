@@ -612,6 +612,62 @@
     transform: translateY(0);
   }
 
+  /* Floating popup (e.g. backup reminder) - deliberately NOT a modal:
+     no backdrop, doesn't cover the viewport, can't block interaction with
+     the rest of the app even if its own dismiss handling ever breaks. */
+  .floating-popup {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: min(340px, calc(100vw - 48px));
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    padding: 16px 18px;
+    z-index: 2500;
+  }
+
+  .floating-popup[hidden] {
+    display: none;
+  }
+
+  .floating-popup h4 {
+    margin: 0 28px 8px 0;
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .floating-popup p {
+    margin: 0 0 14px 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .floating-popup .actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .floating-popup-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+
+  .floating-popup-close:hover {
+    color: var(--text);
+  }
+
   /* Version 13: Search container */
   .search-container {
     display: flex;
@@ -879,6 +935,16 @@
     animation: pulseGlow 1.2s ease-in-out infinite;
   }
 
+  /* Shift/ctrl-drag marquee-select rectangle - screen-space (fixed), so it
+     tracks the raw mouse position regardless of canvas zoom/pan */
+  .marquee-select {
+    position: fixed;
+    border: 1px dashed var(--rbc-light-blue);
+    background: rgba(0, 93, 170, .15);
+    pointer-events: none;
+    z-index: 1500;
+  }
+
   /* Task completed styling - background is not !important so a custom
      card Background Color (inline, set by render.js) can still win */
   .node.task-done {
@@ -888,6 +954,17 @@
 
   .node.task-done:hover {
     border-color: #4CAF50 !important;
+  }
+
+  /* Completed but not marked successful ("Success!" button not used) -
+     background is not !important for the same reason as .task-done above */
+  .node.task-unsuccessful {
+    background: linear-gradient(135deg, #4d3319, #3d260f);
+    border-color: #7a5220 !important;
+  }
+
+  .node.task-unsuccessful:hover {
+    border-color: #f59e0b !important;
   }
 
   /* Disabled channel radio buttons */

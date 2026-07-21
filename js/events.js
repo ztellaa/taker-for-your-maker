@@ -233,15 +233,53 @@ window.Events = (function() {
       lastMouseY = e.clientY;
     });
 
+    var marqueeEl = null;
+
+    function updateMarqueeSelection(e) {
+      var m = state.marquee;
+      var x1 = Math.min(m.startX, e.clientX), x2 = Math.max(m.startX, e.clientX);
+      var y1 = Math.min(m.startY, e.clientY), y2 = Math.max(m.startY, e.clientY);
+
+      marqueeEl.style.left = x1 + 'px';
+      marqueeEl.style.top = y1 + 'px';
+      marqueeEl.style.width = (x2 - x1) + 'px';
+      marqueeEl.style.height = (y2 - y1) + 'px';
+
+      state.multiSelectedIds.clear();
+      utils.$$('.node', dom.nodeLayer).forEach(function(el) {
+        var r = el.getBoundingClientRect();
+        var intersects = r.left < x2 && r.right > x1 && r.top < y2 && r.bottom > y1;
+        if(intersects) state.multiSelectedIds.add(el.dataset.id);
+      });
+      window.Render.highlightSelection();
+    }
+
     dom.stageWrap.addEventListener('pointerdown', function(e) {
       if(e.button!==0) return;
       if(e.target.closest('.node')) return;
+
+      // Shift/ctrl + drag on empty canvas draws a marquee-select rectangle
+      // instead of panning.
+      if(e.shiftKey || e.ctrlKey) {
+        state.marquee = {startX: e.clientX, startY: e.clientY};
+        marqueeEl = document.createElement('div');
+        marqueeEl.className = 'marquee-select';
+        document.body.appendChild(marqueeEl);
+        updateMarqueeSelection(e);
+        dom.stageWrap.setPointerCapture(e.pointerId);
+        return;
+      }
+
       state.isPanning = true;
       state.panStart = {x:e.clientX, y:e.clientY, tx:state.tx, ty:state.ty};
       dom.stageWrap.setPointerCapture(e.pointerId);
     });
 
     dom.stageWrap.addEventListener('pointermove', function(e) {
+      if(state.marquee) {
+        updateMarqueeSelection(e);
+        return;
+      }
       if(!state.isPanning) return;
       var dx = e.clientX - state.panStart.x;
       var dy = e.clientY - state.panStart.y;
@@ -250,11 +288,21 @@ window.Events = (function() {
       stageTransform();
     });
 
+    function endMarquee() {
+      state.marquee = null;
+      if(marqueeEl) {
+        marqueeEl.remove();
+        marqueeEl = null;
+      }
+    }
+
     dom.stageWrap.addEventListener('pointerup', function() {
+      endMarquee();
       state.isPanning = false;
     });
 
     dom.stageWrap.addEventListener('pointercancel', function() {
+      endMarquee();
       state.isPanning = false;
     });
   }
@@ -267,12 +315,36 @@ window.Events = (function() {
       if(e.target.closest('.btn, input, textarea, select, a[href], [role="link"]')) return;
 
       var id = card.dataset.id;
+
+      // Shift/ctrl+click toggles multi-selection instead of starting a drag.
+      if(e.shiftKey || e.ctrlKey) {
+        if(state.multiSelectedIds.has(id)) {
+          state.multiSelectedIds.delete(id);
+        } else {
+          state.multiSelectedIds.add(id);
+        }
+        window.Render.highlightSelection();
+        return;
+      }
+
+      // Clicking a card that's part of the current multi-selection drags
+      // the whole group; any other plain click collapses back to a single selection.
+      var isGroupDrag = state.multiSelectedIds.has(id) && state.multiSelectedIds.size > 1;
+      if(!isGroupDrag) {
+        state.multiSelectedIds.clear();
+      }
+
       window.Render.selectNode(id);
       var rect = dom.stage.getBoundingClientRect();
       var localX = (e.clientX-rect.left)/state.zoom;
       var localY = (e.clientY-rect.top)/state.zoom;
       var node = nodeOps.findNode(id).node;
-      state.drag = {id:id, offX:localX-node.pos.x, offY:localY-node.pos.y};
+      state.drag = {
+        id: id,
+        offX: localX-node.pos.x,
+        offY: localY-node.pos.y,
+        group: isGroupDrag ? Array.from(state.multiSelectedIds) : null
+      };
       state.dragStartPos = {x:e.clientX, y:e.clientY};
       card.classList.add('dragging');
       if(card.setPointerCapture) card.setPointerCapture(e.pointerId);
@@ -375,6 +447,28 @@ window.Events = (function() {
       if(isNaN(intendedPos.x) || !isFinite(intendedPos.x)) intendedPos.x = prevX;
       if(isNaN(intendedPos.y) || !isFinite(intendedPos.y)) intendedPos.y = prevY;
 
+      if(state.drag.group) {
+        // Group drag: translate every selected node by the same raw delta,
+        // skipping overlap-avoidance entirely so multiple simultaneously
+        // moving nodes don't fight each other.
+        var groupDx = intendedPos.x - prevX, groupDy = intendedPos.y - prevY;
+        state.drag.group.forEach(function(gid) {
+          var gn = nodeOps.findNode(gid).node;
+          if(!gn) return;
+          gn.pos.x += groupDx;
+          gn.pos.y += groupDy;
+          var gcard = dom.nodeLayer.querySelector('.node[data-id="'+gid+'"]');
+          if(gcard) {
+            gcard.style.left = gn.pos.x + 'px';
+            gcard.style.top = gn.pos.y + 'px';
+          }
+        });
+        window.Render.drawLinks(new Map(utils.$$('.node', dom.nodeLayer).map(function(el){
+          return [el.dataset.id, el];
+        })), new Set());
+        return;
+      }
+
       // Adjust position to prevent overlap (unless near center for reparenting)
       var adjustedPos = adjustForOverlap(intendedPos, state.drag.id);
       node.pos.x = adjustedPos.x;
@@ -426,6 +520,16 @@ window.Events = (function() {
       // Remove drop-target class from all nodes
       var allNodes = dom.nodeLayer.querySelectorAll('.node');
       allNodes.forEach(function(n) { n.classList.remove('drop-target'); });
+
+      if(state.drag.group) {
+        // Group drags don't reparent - just finalize the move.
+        state.drag = null;
+        state.dragStartPos = null;
+        window.Storage.markDirty();
+        window.Render.renderMindMap();
+        window.Render.buildList();
+        return;
+      }
 
       // Calculate drag distance
       var dragDistance = 0;
@@ -524,6 +628,7 @@ window.Events = (function() {
       state.map = nodeOps.newNode('Root','Contact',null);
       state.map.pos = {x:0,y:0};
       state.selectedId = state.map.id;
+      state.multiSelectedIds.clear();
       window.Storage.markDirty();
       window.Render.renderMindMap();
       window.Render.buildList();
@@ -822,7 +927,9 @@ window.Events = (function() {
           taskNode.due = utils.today();
           taskNode.status = 'done';
           f.node.children.push(taskNode);
-          nodeOps.applyTaskCompletion(taskNode);
+          // Don't apply completion side effects yet - the editor opens next
+          // and the user can still choose Success! vs. plain Save, which
+          // decide whether this counts as a success or a failure.
           window.Storage.markDirty();
           window.Render.renderMindMap();
           window.Render.selectNode(taskNode.id);
@@ -982,8 +1089,12 @@ window.Events = (function() {
 
   function initStageClick() {
     dom.stageWrap.addEventListener('click', function(e) {
+      // A held modifier means this click is the tail end of a marquee-select
+      // gesture, not a deselect-intent click - don't wipe what was just selected.
+      if(e.shiftKey || e.ctrlKey) return;
       if(e.target===dom.stageWrap || e.target===dom.linkLayer) {
         state.selectedId = (state.map && state.map.id) || null;
+        state.multiSelectedIds.clear();
         window.Render.highlightSelection();
       }
     });
