@@ -6,7 +6,7 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '14.2.0';
+  var CURRENT_VERSION = '14.2.1';
 
   function markDirty() {
     state.lastDirty = Date.now();
@@ -254,7 +254,6 @@ window.Storage = (function() {
       if (n.analyticsLogged == null) n.analyticsLogged = false;
       if (n.lastTaskCompletedDate == null) n.lastTaskCompletedDate = '';
       if (n.successful == null) n.successful = false;
-      if (n.failedTaskStreak == null) n.failedTaskStreak = 0;
       if (n.completionCounted == null) n.completionCounted = false;
 
       // Contact-specific field initialization

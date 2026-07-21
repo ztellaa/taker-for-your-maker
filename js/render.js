@@ -29,14 +29,25 @@ window.Render = (function() {
   }
 
   function highlightSelection() {
+    // .node cards live inside #stage, which is scaled by state.zoom - a
+    // fixed CSS px outline would visually shrink to nothing when zoomed
+    // way out, so divide by zoom to keep a consistent on-screen thickness
+    // and reach at any zoom level.
+    var zoom = (state.zoom && state.zoom > 0) ? state.zoom : 1;
+    var width = 3 / zoom;
+    var singleOffset = 3 / zoom;
+    var multiOffset = 9 / zoom; // keeps multi's total reach at 2x single's (width+offset: 12 vs 6)
+
     utils.$$('.node', dom.nodeLayer).forEach(function(el) {
       var isMulti = state.multiSelectedIds && state.multiSelectedIds.has(el.dataset.id);
       var isSingle = el.dataset.id === state.selectedId;
-      el.style.outline = (isMulti || isSingle) ? '2px solid var(--rbc-light-blue)' : 'none';
-      // Multi-selected cards get a ring reaching twice as far from the card
-      // edge as a normal single selection (2px width + 6px offset = 8px
-      // total reach, vs. 2px width + 2px offset = 4px for a single select).
-      el.style.outlineOffset = isMulti ? '6px' : (isSingle ? '2px' : '0');
+      if(isMulti || isSingle) {
+        el.style.outline = width + 'px solid #ffffff';
+        el.style.outlineOffset = (isMulti ? multiOffset : singleOffset) + 'px';
+      } else {
+        el.style.outline = 'none';
+        el.style.outlineOffset = '0';
+      }
     });
   }
 
@@ -117,15 +128,9 @@ window.Render = (function() {
         // A Task completed successfully today or yesterday - temporarily
         // override the card background with the same "done" green used
         // elsewhere, then fall back to the default/custom background after
-        // that window.
+        // that window. A non-successful completion has no background effect
+        // at all - only a success ever changes a Contact's background.
         card.style.background = 'linear-gradient(135deg, #1a3d1a, #0f2d0f)';
-      } else if(n.template === 'Contact' && !n.bgColor && n.failedTaskStreak > 0) {
-        // A run of non-successful completed Tasks - shade the default
-        // background toward red as the streak approaches 10. Respects a
-        // manually-set card bgColor (skipped if set), same as border rotting
-        // respects colorIsCustom.
-        card.style.backgroundColor = nodeOps.getContactFailShade(n);
-        card.style.backgroundImage = 'none';
       } else if(n.bgColor) {
         card.style.backgroundColor = n.bgColor;
         card.style.backgroundImage = 'none'; // suppress .task-done's gradient image so custom bg always wins

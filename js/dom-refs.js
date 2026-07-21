@@ -54,6 +54,7 @@ window.DOM = (function() {
 
     // Editor modal
     editorBackdrop: $('#editorBackdrop'),
+    editorTitle: $('#editorTitle'),
     f_title: $('#f_title'),
     f_template: $('#f_template'),
     f_status: $('#f_status'),

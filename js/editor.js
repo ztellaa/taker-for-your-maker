@@ -246,6 +246,10 @@ window.Editor = (function() {
     var node = nodeOps.findNode(id).node;
     if(!node) return;
 
+    if(dom.editorTitle) {
+      dom.editorTitle.textContent = 'Edit Node - ' + (node.title || 'Untitled');
+    }
+
     // Reset validation state
     validationErrors = {};
     currentNodeTemplate = node.template;
