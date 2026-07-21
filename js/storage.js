@@ -6,7 +6,7 @@ window.Storage = (function() {
   var nodeOps = window.NodeOps;
 
   var BACKUP_KEY = 'wm.backups';
-  var CURRENT_VERSION = '14.1.2';
+  var CURRENT_VERSION = '14.2.0';
 
   function markDirty() {
     state.lastDirty = Date.now();
@@ -57,6 +57,7 @@ window.Storage = (function() {
     var m = (data && data.map) ? migrate(data) : migrate({version:0, map:data});
     state.map = m.map;
     state.selectedId = state.map.id;
+    state.multiSelectedIds.clear();
     state.mapBgColor = data.mapBgColor || null;
     nodeOps.ensurePositions();
     // Apply saved map background color
@@ -89,8 +90,17 @@ window.Storage = (function() {
       version: CURRENT_VERSION,
       createdAt: Date.now(),
       reason: reason,
-      map: state.map
+      map: state.map,
+      mapBgColor: state.mapBgColor
     };
+
+    // The CRM folder is the real backup mechanism when connected - rotating
+    // timestamped files on disk, not subject to localStorage's quota.
+    if(window.FilePersistence && window.FilePersistence.isConnected()) {
+      window.FilePersistence.snapshotToFolder(payload, reason);
+    }
+
+    // localStorage stays as a fallback for when no folder is connected.
     var name = sanitize(rootTitle()) + '-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.json';
     var entry = {
       name: name,
@@ -243,6 +253,9 @@ window.Storage = (function() {
       if (n.colorIsCustom == null) n.colorIsCustom = false;
       if (n.analyticsLogged == null) n.analyticsLogged = false;
       if (n.lastTaskCompletedDate == null) n.lastTaskCompletedDate = '';
+      if (n.successful == null) n.successful = false;
+      if (n.failedTaskStreak == null) n.failedTaskStreak = 0;
+      if (n.completionCounted == null) n.completionCounted = false;
 
       // Contact-specific field initialization
       if (n.template === 'Contact') {
@@ -285,6 +298,7 @@ window.Storage = (function() {
           var m = migrate(data);
           state.map = m.map;
           state.selectedId = state.map.id;
+          state.multiSelectedIds.clear();
           state.mapBgColor = data.mapBgColor || null;
           if(window.Events && window.Events.applyMapBackground) {
             window.Events.applyMapBackground(state.mapBgColor);

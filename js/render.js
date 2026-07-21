@@ -30,9 +30,13 @@ window.Render = (function() {
 
   function highlightSelection() {
     utils.$$('.node', dom.nodeLayer).forEach(function(el) {
-      var on = el.dataset.id === state.selectedId;
-      el.style.outline = on ? '2px solid var(--rbc-light-blue)' : 'none';
-      el.style.outlineOffset = on ? '2px' : '0';
+      var isMulti = state.multiSelectedIds && state.multiSelectedIds.has(el.dataset.id);
+      var isSingle = el.dataset.id === state.selectedId;
+      el.style.outline = (isMulti || isSingle) ? '2px solid var(--rbc-light-blue)' : 'none';
+      // Multi-selected cards get a ring reaching twice as far from the card
+      // edge as a normal single selection (2px width + 6px offset = 8px
+      // total reach, vs. 2px width + 2px offset = 4px for a single select).
+      el.style.outlineOffset = isMulti ? '6px' : (isSingle ? '2px' : '0');
     });
   }
 
@@ -87,7 +91,10 @@ window.Render = (function() {
       var card = document.createElement('div');
       var highlightCls = n.highlight ? ' highlight' : (n.proxyHighlight ? ' proxy-highlight' : '');
       var subtreeCls = n.template === 'Sub-Tree' ? ' subtree' : '';
-      var taskDoneCls = (n.template === 'Task' && n.status === 'done') ? ' task-done' : '';
+      var taskDoneCls = '';
+      if(n.template === 'Task' && n.status === 'done') {
+        taskDoneCls = n.successful ? ' task-done' : ' task-unsuccessful';
+      }
       card.className = 'node' + highlightCls + subtreeCls + taskDoneCls;
       card.style.left = n.pos.x + 'px';
       card.style.top = n.pos.y + 'px';
@@ -107,10 +114,18 @@ window.Render = (function() {
         card.style.borderColor = utils.shade(n.color, -0.2);
       }
       if(n.template === 'Contact' && nodeOps.isRecentlyCompleted(n)) {
-        // A Task completed today or yesterday - temporarily override the
-        // card background with the same "done" green used elsewhere, then
-        // fall back to the default/custom background after that window.
+        // A Task completed successfully today or yesterday - temporarily
+        // override the card background with the same "done" green used
+        // elsewhere, then fall back to the default/custom background after
+        // that window.
         card.style.background = 'linear-gradient(135deg, #1a3d1a, #0f2d0f)';
+      } else if(n.template === 'Contact' && !n.bgColor && n.failedTaskStreak > 0) {
+        // A run of non-successful completed Tasks - shade the default
+        // background toward red as the streak approaches 10. Respects a
+        // manually-set card bgColor (skipped if set), same as border rotting
+        // respects colorIsCustom.
+        card.style.backgroundColor = nodeOps.getContactFailShade(n);
+        card.style.backgroundImage = 'none';
       } else if(n.bgColor) {
         card.style.backgroundColor = n.bgColor;
         card.style.backgroundImage = 'none'; // suppress .task-done's gradient image so custom bg always wins

@@ -20,6 +20,10 @@ window.AppState = {
   isPanning: false,
   panStart: null,
 
+  // Multi-selection state
+  multiSelectedIds: new Set(),
+  marquee: null,
+
   // Editor state
   selectedPaletteColor: null,
 

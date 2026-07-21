@@ -6,43 +6,61 @@ window.Modals = (function() {
   var nodeOps = window.NodeOps;
   var storage = window.Storage;
 
-  // Backups Modal
+  // Backups Modal - reads from the connected CRM folder (the real backup
+  // mechanism, not subject to localStorage's quota) when one is connected,
+  // falling back to the localStorage array otherwise.
   function rebuildBackupsUI() {
-    dom.backupsList.innerHTML = '';
-    var list = storage.readBackups();
+    dom.backupsList.innerHTML = '<div class="row"><div>Loading…</div></div>';
 
-    if(!list.length) {
-      dom.backupsList.innerHTML = '<div class="row"><div>No backups yet.</div></div>';
-      return;
-    }
+    var useFolder = !!(window.FilePersistence && window.FilePersistence.isConnected());
+    var listPromise = useFolder ? window.FilePersistence.listFolderBackups() : Promise.resolve(storage.readBackups());
 
-    list.forEach(function(b) {
-      var row = document.createElement('div');
-      row.className = 'row';
-      var dt = new Date(b.ts).toLocaleString();
-      row.innerHTML = '<div><div class=title>'+utils.esc(b.name)+'</div><div class=crumbs>'+utils.esc(dt)+' · '+utils.esc(b.reason||'autosave')+'</div></div><div class=right><button class=btn data-act=restore>Restore</button><button class=btn data-act=download>Download</button></div>';
+    listPromise.then(function(list) {
+      dom.backupsList.innerHTML = '';
 
-      row.addEventListener('click', function(e) {
-        var act = e.target && e.target.dataset && e.target.dataset.act;
+      if(!list.length) {
+        dom.backupsList.innerHTML = '<div class="row"><div>No backups yet.</div></div>';
+        return;
+      }
 
-        if(act==='restore') {
-          if(confirm('Restore this backup? Current map will be replaced.')) {
-            storage.applyLoaded(b.payload);
-            dom.backupsBackdrop.style.display = 'none';
-          }
-        }
+      list.forEach(function(b) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        var dt = new Date(b.ts).toLocaleString();
+        row.innerHTML = '<div><div class=title>'+utils.esc(b.name)+'</div><div class=crumbs>'+utils.esc(dt)+' · '+utils.esc(b.reason||'autosave')+'</div></div><div class=right><button class=btn data-act=restore>Restore</button><button class=btn data-act=download>Download</button></div>';
 
-        if(act==='download') {
-          var blob = new Blob([JSON.stringify(b.payload,null,2)], {type:'application/json'});
-          var a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = b.name;
-          a.click();
-          URL.revokeObjectURL(a.href);
-        }
+        row.addEventListener('click', function(e) {
+          var act = e.target && e.target.dataset && e.target.dataset.act;
+          if(!act) return;
+
+          var payloadPromise = useFolder ? window.FilePersistence.readFolderBackup(b.name) : Promise.resolve(b.payload);
+
+          payloadPromise.then(function(payload) {
+            if(!payload) {
+              alert('Could not load that backup.');
+              return;
+            }
+
+            if(act==='restore') {
+              if(confirm('Restore this backup? Current map will be replaced.')) {
+                storage.applyLoaded(payload);
+                dom.backupsBackdrop.style.display = 'none';
+              }
+            }
+
+            if(act==='download') {
+              var blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = b.name;
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }
+          });
+        });
+
+        dom.backupsList.appendChild(row);
       });
-
-      dom.backupsList.appendChild(row);
     });
   }
 

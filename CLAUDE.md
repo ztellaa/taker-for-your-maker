@@ -51,7 +51,10 @@ Nodes are tree-structured objects with this shape:
   color: string,        // Hex color
   colorIsCustom: boolean, // True once a Contact's Frame Color is manually set (opts out of "rotting")
   analyticsLogged: boolean, // Guards against double-counting Analytics when a Task is saved repeatedly
-  lastTaskCompletedDate: string, // ISO date a child Task last completed; drives the 2-day "just completed" green card background
+  lastTaskCompletedDate: string, // ISO date a child Task last completed successfully; drives the 2-day "just completed" green card background
+  successful: boolean,  // Task only - true only via the "Success!" editor button, not the normal Save button
+  failedTaskStreak: number, // Contact only - consecutive non-successful completed Tasks; drives red background shading
+  completionCounted: boolean, // Guards against double-counting a Task's completion into failedTaskStreak/lastTaskCompletedDate on repeat saves
   anchored: boolean,    // Reserved for future use
   children: array,
   pos: {x, y}          // Absolute coordinates in mind map
@@ -83,12 +86,19 @@ The Touch template was removed in v14. Logging a contact touch is now just creat
 
 1. Select a Contact (or a Sub-Tree under one) and press **T**
 2. A new Task is created as a direct child, already `due` today and `status: 'done'`, and the editor opens so you can set its `Channel`
-3. On save, `nodeOps.applyTaskCompletion(taskNode)` runs (also called immediately at creation, and again on any Task save where `status === 'done'`):
+3. The Task is born `status: 'done'` but its completion side effects don't apply until the editor is actually saved (Save or Success! - see below) - `nodeOps.applyTaskCompletion(taskNode)` runs on any Task save where `status === 'done'`, not at creation, so a cancelled edit doesn't lock in a false "failure":
    - The parent Contact's `Last Contact` field is stamped to today - this is what drives "rotting" (see Rendering System below)
    - If a `Channel` is set and hasn't been logged yet, it's recorded once to the weekly Analytics BD tracker (`Analytics.recordTouch`), guarded by `node.analyticsLogged`
+   - Depending on whether the Task was marked successful (below), it either resets or extends the parent Contact's `failedTaskStreak`
    - There is **no** automatic follow-up Task creation and **no** note roll-up anymore - the rotting frame color is the only staleness signal now
 
 Existing Touch nodes in older saved data are migrated on load (`storage.js:migrate()`, v14 block) into completed/todo Tasks with a `Channel` field, preserving their notes and due date.
+
+### Task Success/Failure Tracking (v14.2)
+
+The Task editor has two ways to complete a Task: **Save** (marks it done per the status dropdown, `node.successful` left `false`/untouched) and **Success!** (`#successBtn`, Task template only - forces `status: 'done'` and `node.successful = true`). Both funnel through the same `performSave(markSuccessful)` in `editor.js`. This distinction drives two things:
+- **Task card color** - done + successful → green `.task-done` (unchanged from before); done + not successful → orange `.node.task-unsuccessful` (new).
+- **Contact card background** - a successful completion resets the parent Contact's `failedTaskStreak` to 0 and triggers the "just completed" green glow; a non-successful completion increments `failedTaskStreak` (capped visually at 10) and shades the Contact's background from the default panel color toward dark red via `nodeOps.getContactFailShade()` - respects a manually-set card Background Color (skipped if `n.bgColor` is set), same as border rotting respects `colorIsCustom`. One success fully resets the shading back to default.
 
 ### Note Roll-up
 
@@ -97,16 +107,17 @@ When a Note is saved, its content automatically rolls up to the parent Contact's
 ### Persistence
 
 The application writes to two independent stores on every change (`storage.js:markDirty()`), so a failure in one doesn't lose data:
-- **localStorage** - `wm.mindmap` (current state) and `wm.backups` (rolling array of last 10 automatic snapshots)
-- **A user-chosen folder on disk** (`js/file-persistence.js`, File System Access API - Chrome/Edge only) - debounced (~2s) writes to `crm-live-database.json` inside the chosen directory. This was added in v14 after a company-wide Windows update silently broke `localStorage`-only autosave. The folder isn't picked automatically (browsers require a user gesture); click the **CRM Folder** toolbar button and choose the folder. The suggested default path is `window.AppConfig.CrmFolderHint` in `config.js`. The chosen folder handle is remembered across sessions via IndexedDB, re-prompting for permission if the browser requires it. Use **Backups → Restore from CRM Folder** to recover if `localStorage` ever gets wiped.
+- **localStorage** - `wm.mindmap` (current state); fallback backup path only (see below)
+- **A user-chosen folder on disk** (`js/file-persistence.js`, File System Access API - Chrome/Edge only) - debounced (~2s) writes to `crm-live-database.json` inside the chosen directory, plus rotating timestamped snapshots in a `backups/` subdirectory (see below). This was added in v14 after a company-wide Windows update silently broke `localStorage`-only autosave. The folder isn't picked automatically (browsers require a user gesture); click the **CRM Folder** toolbar button and choose the folder. The suggested default path is `window.AppConfig.CrmFolderHint` in `config.js`. The chosen folder handle is remembered across sessions via IndexedDB, re-prompting for permission if the browser requires it.
 
-localStorage backups are also triggered:
-- Every 30 seconds (if dirty)
-- On visibility change (tab switch/minimize)
-- Before page unload
-- Manual save button
+**The connected folder is the real backup mechanism (v14.2)** - `js/storage.js:snapshotBackup()` writes into the folder's `backups/` directory (`FilePersistence.snapshotToFolder()`, pruned to the newest 10) whenever one is connected; the localStorage `wm.backups` array is only used as a fallback when no folder is connected (it's capped at 10 full-map snapshots and can silently hit localStorage's quota on a large map - not a concern once a folder is connected). The **Backups** modal (`modals.js:rebuildBackupsUI()`) reads from whichever source is active. Reliability fixes in v14.2 that make this trustworthy:
+- `scheduleWrite()`'s 2s debounce is flushed immediately (`FilePersistence.flushPending()`) on `visibilitychange`/`beforeunload` (wired in `main.js:initFilePersistence()`) so an edit followed by closing the tab isn't lost, mirroring the same triggers `initAutosave()` already used for localStorage.
+- Connecting/reconnecting a folder writes the current state immediately instead of waiting for the next edit.
+- A failed write sets a visible `'error'` status on the **CRM Folder** toolbar button instead of silently staying "Connected ✓".
 
-A weekly reminder modal (`main.js:checkBackupReminder()`) nudges the user to copy the CRM folder somewhere safe (OneDrive, USB, etc.) as a manual off-machine backup.
+Use **Backups → Restore from CRM Folder** (live single-file) or restore any entry from the **Backups** list (rotating snapshots) to recover.
+
+A floating reminder popup (`main.js:checkBackupReminder()`, `#backupReminderPopup` in `index.html`) nudges the user weekly to copy the CRM folder somewhere safe (OneDrive, USB, etc.) as a manual off-machine backup. Deliberately **not** a modal (`.floating-popup`, not `.modal-backdrop`) - it can't block interaction with the rest of the app even if its dismiss handling ever breaks, unlike the v14.0-14.1 version which could get stuck open.
 
 ### Rendering System
 
@@ -117,10 +128,15 @@ The mind map uses a dual-layer rendering approach:
 Coordinates are managed through `state.zoom`, `state.tx`, `state.ty` and individual `node.pos` values. The stage transform combines global pan/zoom with per-node positions. On launch, the viewport is centered on the root node (`events.centerOnNode(state.map)`, called from `main.js:init()`).
 
 Node cards have dynamic styling:
-- Task nodes turn green when status is 'done'
+- Task nodes turn green (`.task-done`) when done and marked successful, orange (`.node.task-unsuccessful`, v14.2) when done but not marked successful
 - **Contact "rotting"** (v14) - a Contact's frame (border) color interpolates from bright green (Last Contact ≤2 weeks ago) to red (≥~4 months ago, or no Last Contact at all) via `nodeOps.getContactRotColor()` / `utils.lerpColor()`. If the user has manually picked a Frame Color for that Contact (`node.colorIsCustom`), rotting doesn't override it - instead a 🚩 flag badge appears once it's been 30+ days since Last Contact. An overdue not-done Task anywhere under the Contact (`nodeOps.getContactNextOpenTask()`) forces full rot regardless of how recent Last Contact is (v14.1.1).
 - **"Next" display** (v14.1.1) - the Contact card's "Next: `<date>`" badge no longer reflects the standalone `fields['Next Contact']` field. It only appears when there's an actual outstanding (not-done) Task under the Contact, showing that Task's due date (overdue = red badge, future = plain). No open Task means no "Next" badge at all. The `Next Contact` field/editor input still exists in the data model for manual reference, but no longer drives what's shown on the card.
-- **"Just completed" glow** (v14.1.2) - a Contact card's *background* (separate from the border-based rotting color) temporarily switches to the same dark-green gradient used for done Tasks whenever a Task under it completed today or yesterday (`node.lastTaskCompletedDate`, stamped by `applyTaskCompletion()`; checked via `nodeOps.isRecentlyCompleted()`). This overrides any custom card Background Color for that 2-day window, then falls back to the custom color (or the default panel background) automatically once the window passes - there's no cleanup step, it's just a live date comparison on every render.
+- **Contact background precedence** (`render.js`, order matters) - (1) "just completed" glow: dark-green gradient for 2 days after a *successful* Task completion (`nodeOps.isRecentlyCompleted()`), overrides everything; (2) failure-streak shading (v14.2): dark red shading via `nodeOps.getContactFailShade()` when `failedTaskStreak > 0`, skipped if a custom `bgColor` is set; (3) custom card Background Color; (4) default panel color.
+- **Multi-select highlight** (v14.2) - `render.js:highlightSelection()` gives cards in `state.multiSelectedIds` an outline reaching twice as far from the card edge (6px offset + 2px width = 8px) as a normal single selection (2px offset + 2px width = 4px).
+
+### Multi-select (v14.2)
+
+Hold **Shift** or **Ctrl** (treated identically - no range-vs-toggle distinction) and drag from empty canvas to draw a marquee-select rectangle (`events.js:initPanning()`, `.marquee-select` in `styles.css` - a screen-space `position:fixed` div, not affected by canvas zoom/pan); every card intersecting it (via `getBoundingClientRect()`) is added to `state.multiSelectedIds`. Shift/ctrl+click a single card toggles it into/out of that set instead of starting a drag. Clicking (and holding) any card that's part of the current multi-selection drags the whole group together via `state.drag.group` (an array of ids) - group drags translate every selected node by the same raw delta and skip the single-drag overlap-avoidance/reparent-on-drop logic entirely, so multiple simultaneously-moving nodes don't fight each other. A plain click on empty canvas (`initStageClick()`) clears `multiSelectedIds` along with resetting `state.selectedId` to root.
 
 ### View Modes
 
@@ -157,14 +173,15 @@ python -m http.server 8000
 ## Keyboard Shortcuts
 
 - **Arrow keys** - Navigate nodes
-- **E** - Edit selected node (or Meta card)
+- **E** - Edit selected node
 - **C** - Add child node
 - **P** - Create new Contact node
 - **T** - Log a completed Task (Contact or Sub-Tree selection only) - due today, status done
 - **F** - Fold/unfold node
 - **H** - Highlight/flag node
-- **D** - Auto-arrange subtree (creates Meta cards for groups of 8+)
-- **Delete** - Delete node (or Meta card)
+- **D** - Auto-arrange subtree (`nodeOps.tidySubtree()` - grid layout that wraps into additional columns after 8 siblings at the same depth; there is no separate "Meta card" object despite some older docs/dead CSS suggesting otherwise)
+- **Delete** - Delete node
+- **Shift/Ctrl + drag** (empty canvas) - Marquee-select multiple cards (v14.2)
 - **Ctrl+Z** - Undo
 - **Ctrl+Shift+Z** - Redo
 
@@ -180,7 +197,8 @@ python -m http.server 8000
 - Card HTML structure: `render.js:renderMindMap()`
 - Node display logic: Template `show()` functions in `config.js`
 - Link rendering: `render.js:drawLinks()`
-- Status-based styling: `styles.css` (.task-done, etc.); Contact rotting color is computed inline in `render.js`, not via CSS classes
+- Status-based styling: `styles.css` (.task-done, .task-unsuccessful, etc.); Contact rotting/fail-shade colors are computed inline in `render.js`, not via CSS classes
+- New child placement: `nodeOps.nextChildPos()` - lands directly below the lowest existing sibling, same `gapX`/`gapY` spacing as `tidySubtree()`
 
 ### Adding event handlers
 - All event binding happens in `events.js`
@@ -190,8 +208,8 @@ python -m http.server 8000
 ### Changing persistence format
 - Save format: `storage.js:downloadCurrent()`
 - Load/migration: `storage.js:applyLoaded()` and `storage.js:migrate()`
-- Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`
-- Current version: 14.1.2
+- Folder-backed writes: `js/file-persistence.js:scheduleWrite()`/`readSnapshot()`/`snapshotToFolder()`
+- Current version: 14.2.0
 
 ## Date Formatting
 
@@ -217,5 +235,7 @@ Helper functions in `node-operations.js`:
 - `getContactRotColor(contact)` - Returns `{color, days}` for the "rotting" frame color based on days since Last Contact (or forced full-rot if there's an overdue open Task)
 - `getContactNextOpenTask(contact)` - Returns the soonest-due not-done Task under a Contact (any depth), or `null`
 - `isRecentlyCompleted(contact)` - True if `lastTaskCompletedDate` is today or yesterday; drives the temporary green card background
-- `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
+- `getContactFailShade(contact)` - Returns a hex color shading from the default panel color toward dark red as `failedTaskStreak` approaches 10 (v14.2)
+- `applyTaskCompletion(taskNode)` - Stamps parent Contact's Last Contact, resets/extends `failedTaskStreak` depending on `taskNode.successful`, and logs Analytics Channel once; idempotent, called on Task creation (T hotkey) and every Task save
+- `nextChildPos(parent)` - Deterministic position for a new child, directly below the lowest existing sibling (v14.2)
 - `rollUpNote(noteNode)` - Rolls note content to parent Contact

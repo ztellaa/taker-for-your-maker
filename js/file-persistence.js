@@ -1,6 +1,7 @@
 // File-backed Persistence - writes a live copy of the map to a user-chosen
-// folder on disk (File System Access API) as a second, independent leg
-// alongside localStorage. Chrome/Edge only; no-ops entirely if unsupported.
+// folder on disk (File System Access API) as the real backup mechanism,
+// alongside localStorage as a fallback for when no folder is connected.
+// Chrome/Edge only; no-ops entirely if unsupported.
 window.FilePersistence = (function() {
   var config = window.AppConfig;
 
@@ -8,10 +9,13 @@ window.FilePersistence = (function() {
   var STORE_NAME = 'handles';
   var HANDLE_KEY = 'crmFolder';
   var FILE_NAME = 'crm-live-database.json';
+  var BACKUPS_DIR = 'backups';
+  var MAX_FOLDER_BACKUPS = 10;
   var SUPPORTED = 'showDirectoryPicker' in window;
 
   var dirHandle = null;
   var writeTimer = null;
+  var lastPayload = null;
 
   function openDb() {
     return new Promise(function(resolve, reject) {
@@ -62,6 +66,10 @@ window.FilePersistence = (function() {
       btn.textContent = 'CRM Folder ⚠';
       btn.classList.add('danger');
       btn.title = 'Click to reconnect folder permission';
+    } else if(status === 'error') {
+      btn.textContent = 'CRM Folder ✗';
+      btn.classList.add('danger');
+      btn.title = 'Last write failed - click to reconnect';
     } else {
       btn.textContent = 'CRM Folder';
       btn.title = 'Choose a folder to back up saves to. Suggested: ' + (config.CrmFolderHint || '');
@@ -73,8 +81,16 @@ window.FilePersistence = (function() {
     return window.showDirectoryPicker({id: 'crm-folder', mode: 'readwrite'}).then(function(handle) {
       dirHandle = handle;
       setStatus('connected');
-      return idbSet(HANDLE_KEY, handle).then(function() { return true; });
-    }).catch(function() { return false; });
+      return idbSet(HANDLE_KEY, handle).then(function() {
+        // Write the current state immediately - don't wait for the next edit.
+        if(window.Storage) window.Storage.markDirty();
+        flushPending();
+        return true;
+      });
+    }).catch(function(err) {
+      console.error('FilePersistence: chooseDirectory failed', err);
+      return false;
+    });
   }
 
   function reconnect() {
@@ -82,11 +98,16 @@ window.FilePersistence = (function() {
     return dirHandle.requestPermission({mode: 'readwrite'}).then(function(perm) {
       if(perm === 'granted') {
         setStatus('connected');
+        if(window.Storage) window.Storage.markDirty();
+        flushPending();
         return true;
       }
       setStatus('needs-permission');
       return false;
-    }).catch(function() { return false; });
+    }).catch(function(err) {
+      console.error('FilePersistence: reconnect failed', err);
+      return false;
+    });
   }
 
   function init() {
@@ -103,7 +124,8 @@ window.FilePersistence = (function() {
       return handle.queryPermission({mode: 'readwrite'}).then(function(perm) {
         setStatus(perm === 'granted' ? 'connected' : 'needs-permission');
       });
-    }).catch(function() {
+    }).catch(function(err) {
+      console.error('FilePersistence: init failed', err);
       setStatus('disconnected');
     });
   }
@@ -116,15 +138,37 @@ window.FilePersistence = (function() {
       return writable.write(JSON.stringify(payload)).then(function() {
         return writable.close();
       });
-    }).then(function() { return true; }).catch(function() { return false; });
+    }).then(function() {
+      setStatus('connected');
+      return true;
+    }).catch(function(err) {
+      console.error('FilePersistence: writeNow failed', err);
+      setStatus('error');
+      return false;
+    });
   }
 
   function scheduleWrite(payload) {
     if(!SUPPORTED || !dirHandle) return;
+    lastPayload = payload;
     if(writeTimer) clearTimeout(writeTimer);
     writeTimer = setTimeout(function() {
+      writeTimer = null;
       writeNow(payload);
     }, 2000);
+  }
+
+  // Cancel any pending debounced write and do it immediately - used on
+  // tab hide/close (where a 2s debounce would otherwise lose the write)
+  // and right after connecting/reconnecting a folder.
+  function flushPending() {
+    if(writeTimer) {
+      clearTimeout(writeTimer);
+      writeTimer = null;
+    }
+    if(dirHandle && lastPayload) {
+      writeNow(lastPayload);
+    }
   }
 
   function readSnapshot() {
@@ -135,7 +179,85 @@ window.FilePersistence = (function() {
       return file.text();
     }).then(function(text) {
       try { return JSON.parse(text); } catch(e) { return null; }
-    }).catch(function() { return null; });
+    }).catch(function(err) {
+      console.error('FilePersistence: readSnapshot failed', err);
+      return null;
+    });
+  }
+
+  // Rotating timestamped snapshots, written into a "backups" subdirectory
+  // of the connected folder - this is what actually backs the "Backups"
+  // modal now, replacing the quota-fragile localStorage array.
+  function snapshotToFolder(payload, reason) {
+    if(!dirHandle) return Promise.resolve(false);
+    return dirHandle.getDirectoryHandle(BACKUPS_DIR, {create: true}).then(function(backupsDir) {
+      var name = 'backup-' + Date.now() + '-' + (reason || 'auto') + '.json';
+      return backupsDir.getFileHandle(name, {create: true}).then(function(fileHandle) {
+        return fileHandle.createWritable();
+      }).then(function(writable) {
+        return writable.write(JSON.stringify(payload)).then(function() {
+          return writable.close();
+        });
+      }).then(function() {
+        return pruneFolderBackups(backupsDir);
+      }).then(function() { return true; });
+    }).catch(function(err) {
+      console.error('FilePersistence: snapshotToFolder failed', err);
+      return false;
+    });
+  }
+
+  // Keep only the newest MAX_FOLDER_BACKUPS entries in the backups directory.
+  async function pruneFolderBackups(backupsDir) {
+    var names = [];
+    for await (var entry of backupsDir.entries()) {
+      if(entry[1].kind === 'file') names.push(entry[0]);
+    }
+    names.sort(function(a, b) { return parseBackupTs(b) - parseBackupTs(a); });
+    for(var i = MAX_FOLDER_BACKUPS; i < names.length; i++) {
+      try { await backupsDir.removeEntry(names[i]); } catch(e) {}
+    }
+  }
+
+  function parseBackupTs(name) {
+    var m = /^backup-(\d+)-/.exec(name);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  function listFolderBackups() {
+    if(!dirHandle) return Promise.resolve([]);
+    return dirHandle.getDirectoryHandle(BACKUPS_DIR, {create: true}).then(function(backupsDir) {
+      return (async function() {
+        var out = [];
+        for await (var entry of backupsDir.entries()) {
+          var name = entry[0], handle = entry[1];
+          if(handle.kind !== 'file') continue;
+          var m = /^backup-(\d+)-([a-z]+)\.json$/.exec(name);
+          out.push({name: name, ts: m ? parseInt(m[1], 10) : 0, reason: m ? m[2] : 'auto'});
+        }
+        out.sort(function(a, b) { return b.ts - a.ts; });
+        return out;
+      })();
+    }).catch(function(err) {
+      console.error('FilePersistence: listFolderBackups failed', err);
+      return [];
+    });
+  }
+
+  function readFolderBackup(name) {
+    if(!dirHandle) return Promise.resolve(null);
+    return dirHandle.getDirectoryHandle(BACKUPS_DIR, {create: true}).then(function(backupsDir) {
+      return backupsDir.getFileHandle(name);
+    }).then(function(fileHandle) {
+      return fileHandle.getFile();
+    }).then(function(file) {
+      return file.text();
+    }).then(function(text) {
+      try { return JSON.parse(text); } catch(e) { return null; }
+    }).catch(function(err) {
+      console.error('FilePersistence: readFolderBackup failed', err);
+      return null;
+    });
   }
 
   function handleButtonClick() {
@@ -159,11 +281,16 @@ window.FilePersistence = (function() {
 
   return {
     isSupported: function() { return SUPPORTED; },
+    isConnected: function() { return !!dirHandle; },
     init: init,
     initButton: initButton,
     chooseDirectory: chooseDirectory,
     reconnect: reconnect,
     scheduleWrite: scheduleWrite,
-    readSnapshot: readSnapshot
+    flushPending: flushPending,
+    readSnapshot: readSnapshot,
+    snapshotToFolder: snapshotToFolder,
+    listFolderBackups: listFolderBackups,
+    readFolderBackup: readFolderBackup
   };
 })();

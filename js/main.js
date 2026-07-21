@@ -87,25 +87,33 @@ window.Main = (function() {
     if(!window.FilePersistence) return;
     window.FilePersistence.initButton();
     window.FilePersistence.init();
+
+    // A pending debounced write would otherwise be lost if the tab is
+    // closed/hidden before it fires - flush it immediately instead.
+    document.addEventListener('visibilitychange', function() {
+      if(document.hidden) window.FilePersistence.flushPending();
+    });
+    window.addEventListener('beforeunload', function() {
+      window.FilePersistence.flushPending();
+    });
   }
 
   var WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   function checkBackupReminder() {
-    if(!dom.backupReminderBackdrop) return;
+    if(!dom.backupReminderPopup) return;
     var last = parseInt(localStorage.getItem('wm.lastBackupReminder') || '0', 10);
     if(Date.now() - last < WEEK_MS) return;
 
-    dom.backupReminderBackdrop.style.display = 'flex';
-    dom.backupReminderBackdrop.setAttribute('aria-hidden', 'false');
+    dom.backupReminderPopup.hidden = false;
 
-    if(dom.dismissBackupReminderBtn) {
-      dom.dismissBackupReminderBtn.onclick = function() {
-        localStorage.setItem('wm.lastBackupReminder', String(Date.now()));
-        dom.backupReminderBackdrop.style.display = 'none';
-        dom.backupReminderBackdrop.setAttribute('aria-hidden', 'true');
-      };
-    }
+    var dismiss = function() {
+      localStorage.setItem('wm.lastBackupReminder', String(Date.now()));
+      dom.backupReminderPopup.hidden = true;
+    };
+
+    if(dom.dismissBackupReminderBtn) dom.dismissBackupReminderBtn.onclick = dismiss;
+    if(dom.closeBackupReminderBtn) dom.closeBackupReminderBtn.onclick = dismiss;
   }
 
   function init() {

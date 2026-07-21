@@ -235,6 +235,11 @@ window.Editor = (function() {
         }
       }
     }
+
+    // Success! button - Task only
+    if(dom.successBtn) {
+      dom.successBtn.style.display = isTaskTemplate ? '' : 'none';
+    }
   }
 
   function openEditor(id) {
@@ -317,7 +322,7 @@ window.Editor = (function() {
       alert('CSV import functionality - ready for implementation');
     };
 
-    dom.saveEditBtn.onclick = function() {
+    function performSave(markSuccessful) {
       window.UndoManager.capture('edit', {nodeId: node.id, title: node.title});
 
       var tempNode = {
@@ -374,7 +379,10 @@ window.Editor = (function() {
       node.template = dom.f_template.value || prevTemplate;
       node.freq = dom.f_freq.value || '';
 
-      if(!dom.f_status.disabled) {
+      if(markSuccessful) {
+        node.status = 'done';
+        node.successful = true;
+      } else if(!dom.f_status.disabled) {
         node.status = dom.f_status.value;
       }
 
@@ -443,7 +451,12 @@ window.Editor = (function() {
       window.Storage.markDirty();
       window.Render.renderMindMap();
       window.Render.buildList();
-    };
+    }
+
+    dom.saveEditBtn.onclick = function() { performSave(false); };
+    if(dom.successBtn) {
+      dom.successBtn.onclick = function() { performSave(true); };
+    }
 
     dom.cancelEditBtn.onclick = function() {
       dom.editorBackdrop.style.display = 'none';
